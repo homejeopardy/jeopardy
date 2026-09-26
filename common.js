@@ -164,6 +164,8 @@ const J = {
     this.status(`Connecting to room ${this.room}…`);
     const peer = new Peer({ debug: 1 });
     let retry = null;
+    let stalls = 0; // the room answered but the connection never opened
+    const BLOCKED = `Found room ${this.room} but this browser won’t connect to it. Opera: Settings → search “WebRTC” → choose “Default public and private interfaces”, then reload. A VPN or privacy extension can also block this.`;
     const later = (ms, why) => {
       if (why) this.status(why);
       clearTimeout(retry);
@@ -174,19 +176,20 @@ const J = {
       if (this.conn) { try { this.conn.close(); } catch {} }
       if (peer.disconnected) { peer.reconnect(); return later(2000); }
       const conn = (this.conn = peer.connect(PEER_PREFIX + this.room, { metadata: { role: this.role, p: this.p }, serialization: 'json', reliable: true }));
-      conn.on('open', () => { this._lastHeard = Date.now(); this.status(null); });
+      conn.on('open', () => { stalls = 0; this._lastHeard = Date.now(); this.status(null); });
       conn.on('data', m => {
         if (m && m.reply != null) { const f = this._pending[m.reply]; delete this._pending[m.reply]; if (f) f(m); return; }
         if (m && m.now) this._receive(m);
       });
       conn.on('close', () => { if (this.conn === conn) later(1500, `Lost the host — reconnecting to room ${this.room}…`); });
       // if the host never answers, try again
-      setTimeout(() => { if (this.conn === conn && !conn.open) later(0, `Waiting for room ${this.room} — is the control panel open?`); }, 6000);
+      // (peer-unavailable fires first if the room doesn't exist, so a stall means it's blocked)
+      setTimeout(() => { if (this.conn === conn && !conn.open) later(0, ++stalls >= 2 ? BLOCKED : `Connecting to room ${this.room}…`); }, 6000);
     };
     peer.on('open', connect);
     peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); });
     peer.on('error', e => {
-      if (e.type === 'peer-unavailable') later(3000, `Waiting for room ${this.room} — is the control panel open? Check the room code.`);
+      if (e.type === 'peer-unavailable') { stalls = 0; later(3000, `Waiting for room ${this.room} — is the control panel open? Check the room code.`); }
       else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) later(3000, 'Can’t reach the connection server — check the internet. Retrying…');
       else console.warn('peer error', e.type, e);
     });
