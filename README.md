@@ -1,23 +1,29 @@
 # Jeopardy!
 
-A classroom Jeopardy game with four kinds of screens, all running from one computer over Wi-Fi. No installs beyond [Node.js](https://nodejs.org).
+A classroom Jeopardy game with four kinds of screens.
 
-| Screen | Address | Runs on |
+**Play it: https://homejeopardy.github.io/jeopardy/**
+
+Open that page on each device and choose what it is:
+
+| Screen | Page | Runs on |
 |---|---|---|
-| Host control panel | `http://localhost:3300/control` | the host computer only |
-| Game board | `http://<host-ip>:3300/board` | projector / TV |
-| Contestant | `http://<host-ip>:3300/contestant?p=1` (2, 3) | each player's device |
-| Podium display | `http://<host-ip>:3300/podium?p=1` (2, 3) | a tablet at each podium |
+| Host control panel | [control.html](https://homejeopardy.github.io/jeopardy/control.html) | the computer the USB buzzers are plugged into |
+| Game board | [board.html](https://homejeopardy.github.io/jeopardy/board.html) | projector / TV |
+| Contestant | [contestant.html](https://homejeopardy.github.io/jeopardy/contestant.html) | each player's phone or tablet |
+| Podium display | [podium.html](https://homejeopardy.github.io/jeopardy/podium.html) | a tablet at each podium |
 
-## Run it
+The control panel shows a **room code**. The other screens type it in, or scan a QR code from **Setup → Devices**. Screens connect straight to the control panel over the internet ([PeerJS](https://peerjs.com)). The control panel runs the game and saves it in that browser, so keep it open. Reloading it is fine.
 
-Double-click **`Start Jeopardy.command`** (Mac), or:
+## Playing without internet (optional)
+
+If the school network blocks the online version, run the game from your own computer instead. Every device must be on the same Wi-Fi:
 
 ```
 node server.js
 ```
 
-The server prints the addresses to open. Every device must be on the same Wi-Fi as the host. Allow incoming connections for `node` if the Mac asks.
+Or double-click **`Start Jeopardy.command`** on a Mac. Needs [Node.js](https://nodejs.org). The server prints the address for each screen.
 
 ## Features
 
@@ -34,7 +40,7 @@ Buzzers that act as a keyboard or game controller work out of the box. In **Setu
 
 ## Writing a game
 
-Make a spreadsheet and save it as CSV (Google Sheets: File → Download → .csv), then drop it into **Setup → Game file**. See [`sample-game.csv`](sample-game.csv).
+Make a spreadsheet and save it as CSV (Google Sheets: File → Download → .csv), then drop it into **Setup → Game file**. See [`docs/sample-game.csv`](docs/sample-game.csv).
 
 ```
 round,category,value,clue,answer,daily_double

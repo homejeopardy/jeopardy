@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jeopardy</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { background: radial-gradient(ellipse at top, #1a2cff 0%, var(--blue-deep) 45%, var(--blue-dark) 100%); min-height: 100%; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 60px; text-align: center; }
+  h1.logo { font-size: clamp(56px, 14vw, 110px); margin: 0 0 30px; }
+  .card { background: rgba(0,0,20,.45); border: 1px solid #ffffff22; border-radius: 16px; padding: 24px; margin-bottom: 18px; }
+  h2 { margin: 0 0 6px; font-size: 22px; }
+  p { margin: 0 0 16px; opacity: .85; line-height: 1.5; }
+  .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .screens a, .host {
+    display: block; padding: 18px 12px; border-radius: 12px; background: var(--blue); color: #fff; text-decoration: none;
+    box-shadow: inset 0 0 24px rgba(0,0,0,.4); border: 2px solid transparent;
+  }
+  .screens a:hover, .host:hover { border-color: #fff; }
+  .screens b, .host b { display: block; font: 800 22px var(--value-font); text-transform: uppercase; letter-spacing: .02em; }
+  .screens span, .host span { font-size: 14px; opacity: .8; }
+  .host { background: var(--gold); color: #000; }
+  #room { font-size: 34px; text-align: center; letter-spacing: .3em; padding: 10px; border-radius: 10px; border: 0; width: 240px; text-transform: uppercase; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 class="logo">JEOPARDY!</h1>
+
+  <div class="card">
+    <h2>Hosting?</h2>
+    <p>Open the control panel on the computer your USB buzzers are plugged into. It gives you a room code for the other screens.</p>
+    <a class="host" href="control.html"><b>Host control panel</b><span>runs the game</span></a>
+  </div>
+
+  <div class="card">
+    <h2>Joining?</h2>
+    <p id="joinHelp">Type the room code from the control panel, then pick what this screen is.</p>
+    <input id="room" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="ABCD">
+    <div class="screens">
+      <a data-page="board"><b>Game board</b><span>projector / TV</span></a>
+      <a data-page="contestant"><b>Contestant</b><span>a player’s phone or tablet</span></a>
+      <a data-page="podium"><b>Podium</b><span>score + countdown lights</span></a>
+    </div>
+  </div>
+</main>
+<script src="mode.js"></script>
+<script>
+  const room = document.getElementById('room');
+  if (window.JEOPARDY_LOCAL) {
+    room.remove();
+    document.getElementById('joinHelp').textContent = 'Pick what this screen is.';
+  } else {
+    try { room.value = localStorage.getItem('jeopardy-join') || ''; } catch {}
+  }
+  const code = () => room.isConnected ? room.value.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+  document.querySelectorAll('[data-page]').forEach(a => {
+    a.href = a.dataset.page + '.html';
+    a.addEventListener('click', e => {
+      if (!room.isConnected) return;
+      e.preventDefault();
+      if (!code()) { room.focus(); room.placeholder = 'CODE?'; return; }
+      try { localStorage.setItem('jeopardy-join', code()); } catch {}
+      location.href = `${a.dataset.page}.html?room=${code()}`;
+    });
+  });
+</script>
+</body>
+</html>

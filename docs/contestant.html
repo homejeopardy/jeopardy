@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Jeopardy Contestant</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="style.css">
 <style>
   body { background: var(--blue-dark); -webkit-tap-highlight-color: transparent; }
   #wrap { max-width: 640px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 16px 24px; gap: 16px; }
@@ -41,14 +41,18 @@
 </head>
 <body>
 <div id="app"></div>
-<script src="/common.js"></script>
+<script src="mode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="common.js"></script>
 <script>
 const pnum = parseInt(Q.get('p'), 10);
 const app = document.getElementById('app');
 
-if (!(pnum >= 1 && pnum <= 3)) {
+if (J.needRoom('JEOPARDY!')) {
+  // waiting for a room code
+} else if (!(pnum >= 1 && pnum <= 3)) {
   app.innerHTML = `<div class="picker"><h1 class="logo">JEOPARDY!</h1><p>Which player are you?</p>
-    ${[1, 2, 3].map(i => `<a href="?p=${i}">Player ${i}</a>`).join('')}</div>`;
+    ${[1, 2, 3].map(i => `<a href="${J.link('contestant', { p: i })}">Player ${i}</a>`).join('')}</div>`;
 } else {
   const me = pnum - 1;
   app.innerHTML = `<div id="wrap"><header><div class="n" id="hn"></div><div class="money" id="hs"></div></header><main id="main"></main></div>`;

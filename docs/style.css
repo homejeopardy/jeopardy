@@ -17,10 +17,10 @@ html, body { margin: 0; height: 100%; }
 body { background: #000; color: var(--ink); font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
 
 /* Shown when the connection to the game computer drops */
-body.offline::after {
-  content: "Reconnecting to the game computer…";
+body[data-offline]::after {
+  content: attr(data-offline);
   position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
-  background: #b00020; color: #fff; padding: 8px 16px; border-radius: 6px;
+  background: #b00020; color: #fff; padding: 8px 16px; border-radius: 6px; max-width: calc(100vw - 32px); text-align: center;
   font: 600 14px -apple-system, sans-serif; z-index: 1000;
 }
 
@@ -43,4 +43,5 @@ body.offline::after {
 
 .picker { min-height: 100%; display: grid; place-content: center; gap: 16px; padding: 24px; background: var(--blue-dark); text-align: center; }
 .picker h1 { margin: 0 0 8px; font-size: 42px; }
+.picker .joinbtn { padding: 16px 40px; background: var(--gold); color: #000; border: 0; font-size: 24px; font-weight: 800; border-radius: 10px; cursor: pointer; }
 .picker a { display: block; padding: 18px 40px; background: var(--blue); color: #fff; text-decoration: none; font-size: 24px; font-weight: 700; border-radius: 10px; }

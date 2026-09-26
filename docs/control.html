@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jeopardy Control</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="style.css">
 <style>
   :root {
     --bg: #0d1020; --panel: #171b33; --panel2: #1f2544; --line: #2d3560; --text: #e8ebff; --muted: #9aa3d0;
@@ -32,6 +32,13 @@
   header .logo { font-size: 26px; }
   header .status { font-weight: 700; padding: 5px 10px; background: var(--panel2); border-radius: 6px; }
   header .spacer { flex: 1; }
+  .roomcode { font: 800 16px var(--value-font); letter-spacing: .12em; padding: 5px 10px; border-radius: 6px; background: #444a70; color: #fff; }
+  .roomcode.live { background: var(--gold); color: #000; }
+  .bigroom { font: 900 54px var(--value-font); letter-spacing: .2em; color: var(--gold); text-align: center; margin: 4px 0 2px; }
+  #qr { position: fixed; inset: 0; background: rgba(0,0,10,.85); display: none; place-content: center; text-align: center; z-index: 30; cursor: pointer; }
+  #qr.on { display: grid; }
+  #qr .box { background: #fff; padding: 18px; border-radius: 12px; display: inline-block; margin: 0 auto 14px; }
+  #qr .box svg { width: min(70vmin, 420px); height: auto; display: block; }
   .tabs button.on { background: var(--text); color: var(--bg); }
 
   #game { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr) 300px; gap: 14px; padding: 14px; align-items: start; }
@@ -92,7 +99,7 @@
   /* setup */
   #setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; padding: 14px; }
   .links td { padding: 5px 6px; }
-  .links code { background: #0a0d1c; padding: 3px 6px; border-radius: 4px; user-select: all; }
+  .links code { background: #0a0d1c; padding: 3px 6px; border-radius: 4px; user-select: all; word-break: break-all; }
   #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; }
   #drop.over { border-color: var(--accent); background: #16204a; }
   .warn { color: var(--warn); font-size: 13px; margin: 4px 0; }
@@ -118,6 +125,7 @@
 <header>
   <span class="logo">JEOPARDY!</span>
   <span class="status" id="status"></span>
+  <span class="roomcode" id="roomBadge" title="Other screens join with this code"></span>
   <span class="tabs row"><button data-tab="game" class="on">Game</button><button data-tab="setup">Setup</button></span>
   <span class="spacer"></span>
   <button data-a="showTitle">Title screen</button>
@@ -140,7 +148,7 @@
       <p><b>Drop a .csv file here</b> or <label><u style="cursor:pointer">choose a file</u><input type="file" id="file" accept=".csv,.tsv,.txt,text/csv" hidden></label></p>
       <p class="muted">From Google Sheets: File → Download → Comma-separated values (.csv)</p>
     </div>
-    <p><a href="/sample-game.csv" style="color:var(--accent)">Download the template / sample game</a></p>
+    <p><a href="sample-game.csv" download="jeopardy-template.csv" style="color:var(--accent)">Download the template / sample game</a></p>
     <details><summary class="muted" style="cursor:pointer">Spreadsheet format</summary>
 <pre class="fmt">round,category,value,clue,answer,daily_double
 J,SCIENCE,200,H2O is the formula for this,What is water?,
@@ -156,7 +164,7 @@ FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
 
   <div class="card">
     <h2>Devices — open these on each screen</h2>
-    <p class="muted">Devices must be on the same Wi-Fi as this Mac. If macOS asks whether to allow incoming connections for “node”, click Allow.</p>
+    <div id="devHelp"></div>
     <table class="links" id="links"></table>
   </div>
 
@@ -188,8 +196,13 @@ FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
 </div>
 
 <div id="toast"></div>
+<div id="qr"></div>
 
-<script src="/common.js"></script>
+<script src="mode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="engine.js"></script>
+<script src="common.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = J.esc, money = J.money;
@@ -220,6 +233,10 @@ function renderHeader(s) {
   const viewName = { title: 'Title screen', board: 'Board', clue: 'Clue', final: 'Final', end: 'Game over' }[s.view];
   $('status').textContent = `${ROUND[s.round]} · showing: ${viewName}`;
   $('bUndo').disabled = !s.canUndo;
+  const rb = $('roomBadge');
+  rb.classList.toggle('hidden', J.local);
+  rb.textContent = `ROOM ${J.room}`;
+  rb.classList.toggle('live', !!J.hostOnline);
   $('bBoard').disabled = s.round >= 2 || s.view === 'board';
   const nextLabel = s.round === 0 && s.game?.rounds[1]?.categories.length ? 'Double Jeopardy →' : s.round < 2 ? 'Final Jeopardy →' : 'Final scores →';
   $('bNext').textContent = nextLabel;
@@ -399,14 +416,23 @@ function renderSetup(s) {
        ${(s.warnings || []).map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}`
     : '<p class="muted">No game loaded.</p>';
 
-  const base = s.urls[0] || location.origin;
-  const link = (label, path, online) => `<tr><td>${online == null ? '' : `<span class="dot ${online ? 'on' : ''}"></span>`}${label}</td><td><code>${esc(base + path)}</code></td></tr>`;
+  const base = J.local ? (s.urls[0] || location.origin) : location.href.replace(/[?#].*$/, '').replace(/[^/]*$/, '');
+  $('devHelp').innerHTML = J.local
+    ? `<p class="muted">Devices must be on the same Wi-Fi as this computer. If macOS asks whether to allow incoming connections for “node”, click Allow.</p>`
+    : `<div class="bigroom">${esc(J.room)}</div>
+       <p class="muted" style="text-align:center">Room code · ${J.hostOnline ? '<span style="color:var(--good)">open</span>' : '<span style="color:var(--warn)">connecting…</span>'}</p>
+       <p class="muted">On any device with internet, go to <code>${esc(base)}</code>, type the code and pick a screen — or open a link below (click <b>QR</b> to scan it with a phone). Keep this control panel open: it runs the game.</p>`;
+  const link = (label, page, extra, online) => {
+    const url = J.link(page, extra, base);
+    return `<tr><td>${online == null ? '' : `<span class="dot ${online ? 'on' : ''}"></span>`}${label}</td><td><code>${esc(url)}</code></td><td><button class="sm" data-qr="${esc(url)}" data-qrlabel="${label}">QR</button></td></tr>`;
+  };
   $('links').innerHTML =
-    link('Game board', '/board', s.boards) +
-    s.players.map((p, i) => link(`${esc(p.name)} — contestant`, `/contestant?p=${i + 1}`, s.online[i].contestant) +
-                           link(`${esc(p.name)} — podium`, `/podium?p=${i + 1}`, s.online[i].podium)).join('') +
-    (s.urls.length > 1 ? `<tr><td colspan="2" class="muted">Other addresses for this Mac: ${s.urls.slice(1).map(esc).join(', ')}</td></tr>` : '') +
-    `<tr><td colspan="2"><button class="sm" id="openBoard">Open the game board in a new window</button></td></tr>`;
+    link('Game board', 'board', {}, s.boards) +
+    s.players.map((p, i) => link(`${esc(p.name)} — contestant`, 'contestant', { p: i + 1 }, s.online[i].contestant) +
+                           link(`${esc(p.name)} — podium`, 'podium', { p: i + 1 }, s.online[i].podium)).join('') +
+    (s.urls.length > 1 ? `<tr><td colspan="3" class="muted">Other addresses for this Mac: ${s.urls.slice(1).map(esc).join(', ')}</td></tr>` : '') +
+    `<tr><td colspan="3"><button class="sm" id="openBoard">Open the game board in a new window</button>
+      ${J.local ? '' : ' <button class="sm" id="newRoom">New room code</button>'}</td></tr>`;
 
   $('buzzers').innerHTML = s.players.map((p, i) => {
     const keys = Object.keys(s.keys).filter(k => s.keys[k] === i);
@@ -480,7 +506,19 @@ document.addEventListener('click', async e => {
   if (e.target.id === 'ddTrue') {
     const s = J.state; act('ddWager', { amount: Math.max(s.players[s.clue.ddPlayer].score, s.roundMax) });
   }
-  if (e.target.id === 'openBoard') window.open('/board', 'jeopardy-board', 'width=1280,height=720');
+  if (e.target.id === 'openBoard') window.open(J.link('board'), 'jeopardy-board', 'width=1280,height=720');
+  if (e.target.id === 'newRoom' && confirm('Make a new room code? Every other screen will need to rejoin with the new code.')) {
+    try { localStorage.setItem('jeopardy-room', J.newRoomCode()); } catch {}
+    location.reload();
+  }
+  const qr = e.target.closest('[data-qr]');
+  if (qr && window.qrcode) {
+    const q = qrcode(0, 'M'); q.addData(qr.dataset.qr); q.make();
+    $('qr').innerHTML = `<div><div class="box">${q.createSvgTag({ cellSize: 6, margin: 2 })}</div><div style="font-size:20px;font-weight:700">${qr.dataset.qrlabel}</div><div class="muted">Scan with the phone's camera · click anywhere to close</div></div>`;
+    $('qr').classList.add('on');
+    return;
+  }
+  if (e.target.closest('#qr')) $('qr').classList.remove('on');
   if (e.target.id === 'bNew' && confirm('Reset all scores and put every clue back on the board?')) act('newGame');
 });
 
