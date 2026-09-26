@@ -40,7 +40,7 @@ Buzzers that act as a keyboard or game controller work out of the box. In **Setu
 
 ## Writing a game
 
-Make a spreadsheet and save it as CSV (Google Sheets: File → Download → .csv), then drop it into **Setup → Game file**. See [`docs/sample-game.csv`](docs/sample-game.csv).
+Make a spreadsheet and save it as CSV (Google Sheets: File → Download → .csv), then drop it into **Setup → Game file**. See [`sample-game.csv`](sample-game.csv).
 
 ```
 round,category,value,clue,answer,daily_double

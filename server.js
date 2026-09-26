@@ -9,16 +9,16 @@
 //   /podium      a podium display       (?p=1, ?p=2, ?p=3)
 //
 // Pages get live state over Server-Sent Events (/events) and send actions
-// with POST /action. All the game rules live in docs/engine.js.
+// with POST /action. All the game rules live in engine.js.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { createEngine } = require('./docs/engine.js');
+const { createEngine } = require('./engine.js');
 
 const PORT = Number(process.env.PORT) || 3300;
-const PUB = path.join(__dirname, 'docs');
+const PUB = __dirname;
 const SAVE_FILE = path.join(__dirname, 'saved-game.json');
 const SAMPLE_FILE = path.join(PUB, 'sample-game.csv');
 
@@ -121,9 +121,9 @@ const server = http.createServer((req, res) => {
     if (PAGES[p] === 'control.html' && !isLocal(req)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('The control panel only opens on the host computer.'); return; }
     return serveFile(res, path.join(PUB, PAGES[p]));
   }
-  const file = path.normalize(path.join(PUB, p));
-  if (!file.startsWith(PUB + path.sep)) { res.writeHead(403); res.end(); return; }
-  serveFile(res, file);
+  // Only the web pages and their assets — never server.js or the saved game.
+  if (!/^\/[\w-]+\.(html|js|css|csv)$/.test(p) || p === '/server.js') { res.writeHead(404); res.end('Not found'); return; }
+  serveFile(res, path.join(PUB, p));
 });
 
 server.listen(PORT, '0.0.0.0', () => {
