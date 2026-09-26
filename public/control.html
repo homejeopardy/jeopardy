@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jeopardy Control</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  :root {
+    --bg: #0d1020; --panel: #171b33; --panel2: #1f2544; --line: #2d3560; --text: #e8ebff; --muted: #9aa3d0;
+    --accent: #4f7bff; --good: #1fb85b; --bad: #e0434b; --warn: #f0b429;
+  }
+  body { background: var(--bg); color: var(--text); font-size: 14px; }
+  button {
+    font: 600 14px -apple-system, sans-serif; color: var(--text); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 12px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.good { background: var(--good); border-color: var(--good); color: #fff; }
+  button.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
+  button.big { font-size: 18px; padding: 14px 18px; }
+  button.sm { padding: 4px 8px; font-size: 12px; }
+  input, select, textarea { font: 14px -apple-system, sans-serif; background: #0a0d1c; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header .logo { font-size: 26px; }
+  header .status { font-weight: 700; padding: 5px 10px; background: var(--panel2); border-radius: 6px; }
+  header .spacer { flex: 1; }
+  .tabs button.on { background: var(--text); color: var(--bg); }
+
+  #game { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr) 300px; gap: 14px; padding: 14px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+
+  /* mini board */
+  #mini { display: grid; gap: 4px; }
+  #mini .c { min-width: 0; background: var(--blue-deep); font: 800 11px/1.15 var(--value-font); text-transform: uppercase; padding: 6px 4px; text-align: center; border-radius: 4px; min-height: 42px; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; }
+  #mini .t { min-width: 0; background: var(--blue); color: var(--gold-deep); font: 900 clamp(12px, 1.5vw, 20px) var(--value-font); border: 0; border-radius: 4px; padding: 12px 0; position: relative; }
+  #mini .t:hover { outline: 2px solid #fff; }
+  #mini .t.used { background: #1a1d30; color: #3b4166; }
+  #mini .t.cur { outline: 3px solid var(--gold); }
+  #mini .t .dd { position: absolute; top: 2px; right: 5px; font-size: 12px; color: #ff7df0; }
+  .legend { margin-top: 8px; font-size: 12px; }
+
+  /* current clue */
+  #cur .cat { font: 800 13px var(--value-font); text-transform: uppercase; color: var(--muted); letter-spacing: .05em; }
+  #cur .ctext { font: 700 20px/1.35 var(--clue-font); margin: 10px 0 14px; }
+  #cur .ans { background: #0f3b22; border: 1px solid #1f7a45; border-radius: 8px; padding: 12px; font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+  #cur .ans small { display: block; font-size: 11px; font-weight: 600; color: #8fd9ad; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; }
+  .state { padding: 12px; border-radius: 8px; background: var(--panel2); margin-bottom: 12px; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .state.open { background: #123f7a; }
+  .state.buzzed { background: #6b4b00; }
+  .state.timesup { background: #5a1a1f; }
+  .state .t { font: 900 28px var(--value-font); min-width: 1.5ch; text-align: right; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btns .wide { grid-column: 1 / -1; }
+  .ddbox { display: grid; gap: 10px; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pills button.on { background: var(--accent); border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+
+  /* players */
+  .pl { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; position: relative; }
+  .pl.ctrl { border-color: var(--gold); }
+  .pl.buzzed { box-shadow: 0 0 0 3px var(--gold); }
+  .pl.locked { opacity: .55; }
+  .pl.pinged { box-shadow: 0 0 0 3px #fff; }
+  .pl .nm { width: 100%; font-size: 16px; font-weight: 700; }
+  .pl .sc { font-size: 34px; margin: 6px 0; cursor: pointer; }
+  .pl .ctl { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--gold); font-weight: 700; }
+  .pl .meta { font-size: 12px; color: var(--muted); margin-top: 8px; display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #444a70; margin-right: 4px; }
+  .dot.on { background: var(--good); }
+  kbd { background: #0a0d1c; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 12px; color: var(--text); }
+
+  /* final */
+  table.fj { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  table.fj td, table.fj th { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  table.fj th { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: .06em; }
+  table.fj input { width: 90px; }
+  .steps { display: grid; gap: 8px; }
+  .step { display: flex; gap: 10px; align-items: center; }
+  .step .n { width: 24px; height: 24px; border-radius: 50%; background: var(--panel2); display: grid; place-content: center; font-weight: 800; font-size: 12px; flex: none; }
+  .step.done .n { background: var(--good); }
+  .step.now .n { background: var(--accent); }
+
+  /* setup */
+  #setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; padding: 14px; }
+  .links td { padding: 5px 6px; }
+  .links code { background: #0a0d1c; padding: 3px 6px; border-radius: 4px; user-select: all; }
+  #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; }
+  #drop.over { border-color: var(--accent); background: #16204a; }
+  .warn { color: var(--warn); font-size: 13px; margin: 4px 0; }
+  .lastin { font: 800 22px ui-monospace, Menlo, monospace; padding: 14px; background: #0a0d1c; border-radius: 8px; text-align: center; }
+  .setting { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); gap: 10px; }
+  .setting input[type=number] { width: 70px; }
+  pre.fmt { background: #0a0d1c; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+
+  @media (max-width: 1150px) {
+    #game { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    #players { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    #players .pl { margin: 0; }
+  }
+  @media (max-width: 760px) {
+    #game { grid-template-columns: minmax(0, 1fr); }
+    #players { grid-template-columns: 1fr; }
+  }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--bad); color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 600; display: none; z-index: 20; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">JEOPARDY!</span>
+  <span class="status" id="status"></span>
+  <span class="tabs row"><button data-tab="game" class="on">Game</button><button data-tab="setup">Setup</button></span>
+  <span class="spacer"></span>
+  <button data-a="showTitle">Title screen</button>
+  <button data-a="showBoard" id="bBoard">Show board</button>
+  <button data-a="nextRound" id="bNext">Next round →</button>
+  <button data-a="undo" id="bUndo">↶ Undo</button>
+</header>
+
+<div id="game">
+  <div class="card"><h2 id="boardTitle">Board</h2><div id="mini"></div><div class="legend muted" id="legend"></div></div>
+  <div class="card" id="cur"></div>
+  <div id="players"></div>
+</div>
+
+<div id="setup" class="hidden">
+  <div class="card">
+    <h2>Game file</h2>
+    <div id="gameInfo"></div>
+    <div id="drop">
+      <p><b>Drop a .csv file here</b> or <label><u style="cursor:pointer">choose a file</u><input type="file" id="file" accept=".csv,.tsv,.txt,text/csv" hidden></label></p>
+      <p class="muted">From Google Sheets: File → Download → Comma-separated values (.csv)</p>
+    </div>
+    <p><a href="/sample-game.csv" style="color:var(--accent)">Download the template / sample game</a></p>
+    <details><summary class="muted" style="cursor:pointer">Spreadsheet format</summary>
+<pre class="fmt">round,category,value,clue,answer,daily_double
+J,SCIENCE,200,H2O is the formula for this,What is water?,
+J,SCIENCE,400,...,...,yes
+DJ,SPACE,400,...,...,
+FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
+      <p class="muted">round: <b>J</b> (Jeopardy), <b>DJ</b> (Double Jeopardy) or <b>FJ</b> (Final — one row).<br>
+      Up to 6 categories × 5 clues per round, in the order you want them on the board.<br>
+      value is optional (defaults to 200–1000 / 400–2000).<br>
+      daily_double: put <b>yes</b> on the clues you want. If you mark none, 1 is hidden in J and 2 in DJ at random.</p>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Devices — open these on each screen</h2>
+    <p class="muted">Devices must be on the same Wi-Fi as this Mac. If macOS asks whether to allow incoming connections for “node”, click Allow.</p>
+    <table class="links" id="links"></table>
+  </div>
+
+  <div class="card">
+    <h2>Buzzers</h2>
+    <p class="muted">Most USB buzzers act like a keyboard or game controller. Click <b>Learn</b> for a player, then press their buzzer.
+    Keep <b>this window or the game board window</b> in front, or macOS sends the presses somewhere else.</p>
+    <div id="buzzers"></div>
+    <h2 style="margin-top:16px">Buzzer test — last input received</h2>
+    <div class="lastin" id="lastin">Press any buzzer…</div>
+    <p class="muted">Pressing an assigned buzzer when no clue is up flashes that player’s podium lights.</p>
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <div id="settings"></div>
+    <h2 style="margin-top:18px">Test sounds (play on the game board)</h2>
+    <div class="row">
+      <button data-a="playSound" data-id="fill">Board fill</button>
+      <button data-a="playSound" data-id="dd">Daily Double</button>
+      <button data-a="playSound" data-id="timesup">Time's up</button>
+      <button data-a="playSound" data-id="think">Think music</button>
+      <button data-a="playSound" data-id="stop">Stop</button>
+    </div>
+    <p class="muted">The board page needs one click after it opens before it can play sound.</p>
+    <h2 style="margin-top:18px">Start over</h2>
+    <button class="bad" id="bNew">New game — reset scores &amp; board</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = J.esc, money = J.money;
+const ROUND = ['Jeopardy!', 'Double Jeopardy!', 'Final Jeopardy!'];
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 3500);
+}
+async function act(type, data) {
+  const r = await J.send(type, data);
+  if (!r.ok) toast(r.error || 'Something went wrong');
+  return r;
+}
+
+// ------------------------------------------------------------ render
+function render(s) {
+  J.keepFocus(() => {
+    renderHeader(s);
+    renderMini(s);
+    renderCur(s);
+    renderPlayers(s);
+    renderSetup(s);
+  });
+}
+
+function renderHeader(s) {
+  const viewName = { title: 'Title screen', board: 'Board', clue: 'Clue', final: 'Final', end: 'Game over' }[s.view];
+  $('status').textContent = `${ROUND[s.round]} · showing: ${viewName}`;
+  $('bUndo').disabled = !s.canUndo;
+  $('bBoard').disabled = s.round >= 2 || s.view === 'board';
+  const nextLabel = s.round === 0 && s.game?.rounds[1]?.categories.length ? 'Double Jeopardy →' : s.round < 2 ? 'Final Jeopardy →' : 'Final scores →';
+  $('bNext').textContent = nextLabel;
+  $('bNext').disabled = s.view === 'end';
+}
+
+function renderMini(s) {
+  const el = $('mini');
+  if (!s.game) { el.innerHTML = '<p class="muted">No game loaded — go to Setup.</p>'; return; }
+  if (s.round >= 2) {
+    const f = s.game.final;
+    $('boardTitle').textContent = 'Final Jeopardy';
+    el.style.gridTemplateColumns = '1fr';
+    el.innerHTML = f ? `<div class="c" style="font-size:16px;min-height:60px">${esc(f.category)}</div>
+      <div style="padding:10px 4px;font:700 16px/1.4 var(--clue-font)">${esc(f.text)}</div>
+      <div class="ans" style="background:#0f3b22;border-radius:8px;padding:10px;font-weight:700">${esc(f.answer)}</div>` : '<p class="muted">No Final Jeopardy in this game file.</p>';
+    $('legend').textContent = '';
+    return;
+  }
+  const rd = s.game.rounds[s.round];
+  $('boardTitle').textContent = `${ROUND[s.round]} board — click a clue to play it`;
+  el.style.gridTemplateColumns = `repeat(${rd.categories.length}, 1fr)`;
+  const rows = Math.max(...rd.categories.map(c => c.clues.length));
+  let html = rd.categories.map(c => `<div class="c">${esc(c.name)}</div>`).join('');
+  let left = 0;
+  for (let r = 0; r < rows; r++) {
+    html += rd.categories.map((cat, c) => {
+      const cl = cat.clues[r];
+      if (!cl) return '<div></div>';
+      const used = s.used[`${s.round}-${c}-${r}`];
+      if (!used) left++;
+      const cur = s.clue && s.clue.c === c && s.clue.r === r && s.view === 'clue';
+      return `<button class="t ${used ? 'used' : ''} ${cur ? 'cur' : ''}" data-clue="${c},${r}" title="${esc(cl.text)}">${money(cl.value)}${cl.dd ? '<span class="dd">★</span>' : ''}</button>`;
+    }).join('');
+  }
+  el.innerHTML = html;
+  $('legend').innerHTML = `${left} clue${left === 1 ? '' : 's'} left · <span style="color:#ff7df0">★</span> = Daily Double (only you can see this) · click a played clue to put it back`;
+}
+
+function renderCur(s) {
+  const el = $('cur');
+  const P = i => esc(s.players[i]?.name ?? '');
+  if (s.view === 'title') {
+    el.innerHTML = `<h2>Title screen</h2><p>The JEOPARDY! title is on the game board.</p>
+      <button class="primary big" data-a="showBoard" ${s.round >= 2 ? 'disabled' : ''}>Reveal the board ▶</button>
+      <p class="hint">Revealing the board plays the board-fill animation the first time in each round.<br>Before starting: check names, buzzers and device links in <b>Setup</b>.</p>`;
+    return;
+  }
+  if (s.view === 'end') {
+    const best = Math.max(...s.players.map(p => p.score));
+    el.innerHTML = `<h2>Game over</h2><p style="font-size:18px">Winner: <b>${s.players.filter(p => p.score === best).map(p => esc(p.name)).join(' & ')}</b> with ${money(best)}</p>
+      <button data-a="newGame" class="primary">New game (reset scores &amp; board)</button>`;
+    return;
+  }
+  if (s.view === 'final' && s.final) { renderFinal(s, el); return; }
+  if (s.view === 'board' || !s.clue) {
+    const rd = s.game?.rounds[s.round];
+    const left = rd ? rd.categories.reduce((n, cat, c) => n + cat.clues.filter((_, r) => !s.used[`${s.round}-${c}-${r}`]).length, 0) : 0;
+    el.innerHTML = `<h2>Board</h2>
+      <p style="font-size:18px"><b>${P(s.control)}</b> has control — pick a clue on the left.</p>
+      ${left === 0 ? `<p>All clues in this round have been played.</p><button class="primary big" data-a="nextRound">${s.round === 0 && s.game.rounds[1]?.categories.length ? 'Go to Double Jeopardy →' : 'Go to Final Jeopardy →'}</button>` : ''}
+      <p class="hint">Change who has control with the “Give control” button on a player.</p>`;
+    return;
+  }
+
+  const c = s.clue;
+  let h = `<div class="cat">${esc(c.cat)} · ${money(c.value)}${c.dd ? ' · DAILY DOUBLE' : ''}</div>`;
+
+  if (c.dd && !c.shown) {
+    const max = Math.max(s.players[c.ddPlayer].score, s.roundMax);
+    h += `<div class="state" style="background:#4a1470">DAILY DOUBLE — on the board now</div>
+      <div class="ddbox">
+        <div>Who is answering? <div class="pills">${s.players.map((p, i) => `<button class="${i === c.ddPlayer ? 'on' : ''}" data-a="setDDPlayer" data-i="${i}">${esc(p.name)}</button>`).join('')}</div></div>
+        <div>${P(c.ddPlayer)} has ${money(s.players[c.ddPlayer].score)}. They can wager $0 – ${money(max)}.</div>
+        <div class="row"><input id="ddw" inputmode="numeric" placeholder="Wager" style="width:140px;font-size:18px">
+          <button class="primary" id="ddGo">Lock wager &amp; show clue</button>
+          <button class="sm" id="ddTrue">True Daily Double (${money(max)})</button></div>
+      </div>
+      <p class="hint">The clue stays hidden from the board until the wager is locked in.</p>`;
+    el.innerHTML = h;
+    return;
+  }
+
+  h += `<div class="ctext">${esc(c.text)}</div>
+    <div class="ans"><small>Correct response</small>${esc(c.answer)}</div>`;
+
+  if (c.dd) {
+    h += `<div class="state buzzed">${P(c.ddPlayer)} is answering for ${money(c.ddWager)}</div>`;
+    if (!c.answerShown) h += `<div class="btns"><button class="good big" data-a="judge" data-correct="1">✓ Correct</button><button class="bad big" data-a="judge" data-correct="">✗ Incorrect</button></div>`;
+  } else if (c.answerShown) {
+    const r = c.result;
+    h += `<div class="state">${r ? `${P(r.p)} — ${r.correct ? 'correct ✓' : 'incorrect'}` : 'Answer revealed'}</div>`;
+  } else if (c.buzz === 'buzzed') {
+    h += `<div class="state buzzed"><span>🔔 ${P(c.buzzed)} buzzed in${c.answerTimeUp ? " — time's up" : ''}</span><span class="t" data-timer id="tAns"></span></div>
+      <div class="btns"><button class="good big" data-a="judge" data-correct="1">✓ Correct (+${money(c.value)})</button><button class="bad big" data-a="judge" data-correct="">✗ Incorrect (−${money(c.value)})</button></div>`;
+  } else if (c.buzz === 'open') {
+    h += `<div class="state open"><span>Buzzers OPEN — waiting…</span><span class="t" data-timer id="tBuzz"></span></div>
+      <div class="btns"><button data-a="closeBuzz">Close buzzers</button></div>`;
+  } else {
+    const allLocked = c.locked.length >= s.players.length;
+    h += `<div class="state ${c.timesUp ? 'timesup' : ''}">${c.timesUp ? "Time's up — nobody buzzed" : allLocked ? 'Everyone has answered' : 'Read the clue, then open the buzzers'}</div>
+      <div class="btns"><button class="primary big wide" data-a="openBuzz" ${allLocked ? 'disabled' : ''}>Open buzzers</button></div>`;
+  }
+  if (c.locked.length && !c.dd) h += `<p class="muted">Locked out: ${c.locked.map(P).join(', ')}</p>`;
+
+  h += `<div class="btns" style="margin-top:8px">
+      <button data-a="revealAnswer" ${c.answerShown ? 'disabled' : ''}>Show answer on board</button>
+      <button class="${c.answerShown ? 'primary' : ''}" data-a="backToBoard">Back to board</button></div>
+    <p class="hint">Buzzing before you open the buzzers locks that player out for ¼ second, like the real show.</p>`;
+  el.innerHTML = h;
+  const tb = $('tBuzz'); if (tb) tb._timer = c.buzzTimer;
+  const ta = $('tAns'); if (ta) ta._timer = c.ansTimer;
+}
+
+function renderFinal(s, el) {
+  const f = s.final;
+  const order = s.players.map((p, i) => i).filter(i => f.eligible[i]).sort((a, b) => s.players[a].score - s.players[b].score);
+  const steps = ['category', 'clue', 'thinking', 'locked', 'reveal'];
+  const at = steps.indexOf(f.step);
+  const st = (n, idx, label, btn) => `<div class="step ${at > idx ? 'done' : at === idx ? 'now' : ''}"><span class="n">${n}</span><span style="flex:1">${label}</span>${btn || ''}</div>`;
+  let h = `<h2>Final Jeopardy — ${esc(s.game.final?.category)}</h2>
+    <div class="steps">
+      ${st(1, 0, 'Category is on the board. Players enter wagers on their devices.', '')}
+      ${st(2, 1, 'Show the clue', `<button class="${at === 0 ? 'primary' : ''}" data-a="finalShowClue">Show clue</button>`)}
+      ${st(3, 2, `Think music — ${s.settings.finalTime}s <span class="t" data-timer id="tFinal" style="font-weight:800;color:var(--gold)"></span>`,
+          f.step === 'thinking' ? `<button data-a="finalLock">Stop &amp; lock</button>` : `<button class="${at === 1 ? 'primary' : ''}" data-a="finalStartTimer" ${at < 1 ? 'disabled' : ''}>Start</button>`)}
+      ${st(4, 4, 'Reveal each player (lowest score first)', '')}
+    </div>
+    <table class="fj"><tr><th>Player</th><th>Score</th><th>Wager</th><th>Response</th><th></th></tr>
+    ${s.players.map((p, i) => {
+      if (!f.eligible[i]) return `<tr class="muted"><td>${esc(p.name)}</td><td>${money(p.score)}</td><td colspan="2">not playing</td><td><button class="sm" data-a="finalToggleEligible" data-i="${i}">Let play</button></td></tr>`;
+      const res = f.results[i];
+      return `<tr>
+        <td><b>${esc(p.name)}</b></td><td>${money(p.score)}</td>
+        <td>${f.wagers[i] != null ? money(f.wagers[i]) : '<span style="color:var(--warn)">waiting…</span>'}
+            <br><input id="fw${i}" class="sm" placeholder="set" inputmode="numeric" data-fw="${i}"></td>
+        <td>${f.answers[i] ? `“${esc(f.answers[i])}”` : '<span class="muted">—</span>'}</td>
+        <td style="white-space:nowrap">${res ? `<b style="color:${res.correct ? 'var(--good)' : 'var(--bad)'}">${res.correct ? '✓ right' : '✗ wrong'}</b>`
+          : `<button class="sm ${f.cur === i && f.shown[i] ? '' : 'primary'}" data-a="finalShow" data-i="${i}" ${at < 1 ? 'disabled' : ''}>Show response</button>
+             ${f.shown[i] ? `<br><button class="sm good" data-a="finalJudge" data-i="${i}" data-correct="1">✓</button> <button class="sm bad" data-a="finalJudge" data-i="${i}" data-correct="">✗</button>` : ''}`}</td></tr>`;
+    }).join('')}</table>
+    <p class="muted">Reveal order: ${order.map(i => esc(s.players[i].name)).join(' → ') || 'nobody is eligible'}. Type in the “set” box + Enter to enter a wager for someone.</p>
+    <div class="row"><button data-a="finalShowAnswer">Show correct response on board</button><button class="primary" data-a="endGame">Final scores →</button></div>`;
+  el.innerHTML = h;
+  const tf = $('tFinal'); if (tf) tf._timer = f.step === 'thinking' ? f.timer : null;
+}
+
+function renderPlayers(s) {
+  const c = s.view === 'clue' ? s.clue : null;
+  const step = c ? (c.dd ? c.ddWager || c.value : c.value) : (s.round === 1 ? 400 : 200);
+  const now = J.now();
+  $('players').innerHTML = s.players.map((p, i) => {
+    const keys = Object.keys(s.keys).filter(k => s.keys[k] === i);
+    const on = s.online[i];
+    const pinged = s.ping.p === i && now - s.ping.at < 600;
+    return `<div class="pl ${s.control === i ? 'ctrl' : ''} ${c && c.buzzed === i ? 'buzzed' : ''} ${c && c.locked.includes(i) ? 'locked' : ''} ${pinged ? 'pinged' : ''}">
+      ${s.control === i ? '<span class="ctl">HAS CONTROL</span>' : ''}
+      <input class="nm" id="nm${i}" data-name="${i}" value="${esc(p.name)}" style="width:calc(100% - 90px)">
+      <div class="sc money ${p.score < 0 ? 'neg' : ''}" data-editscore="${i}" title="Click to type a score">${money(p.score)}</div>
+      <div class="row">
+        <button class="sm bad" data-a="adjust" data-i="${i}" data-delta="${-step}">−${money(step)}</button>
+        <button class="sm good" data-a="adjust" data-i="${i}" data-delta="${step}">+${money(step)}</button>
+        <button class="sm" data-a="setControl" data-i="${i}" ${s.control === i ? 'disabled' : ''}>Give control</button>
+      </div>
+      <div class="meta">
+        <span>Buzzer: ${s.learning === i ? '<b style="color:var(--gold)">press it now…</b>' : keys.length ? keys.map(k => `<kbd>${esc(k)}</kbd>`).join(' ') : '<span style="color:var(--warn)">none</span>'}</span>
+        <span><span class="dot ${on.contestant ? 'on' : ''}"></span>phone <span class="dot ${on.podium ? 'on' : ''}"></span>podium</span>
+      </div>
+    </div>`;
+  }).join('') + `<div class="muted" style="font-size:12px"><span class="dot ${s.boards ? 'on' : ''}"></span>game board ${s.boards ? 'connected' : 'not open'}</div>`;
+}
+
+function renderSetup(s) {
+  const nClues = s.game ? s.game.rounds.map(r => r.categories.reduce((n, c) => n + c.clues.length, 0)) : [0, 0];
+  $('gameInfo').innerHTML = s.game
+    ? `<p>Loaded: <b>${esc(s.gameName)}</b> — ${s.game.rounds[0].categories.length} categories / ${nClues[0]} clues in Jeopardy, ${s.game.rounds[1].categories.length} / ${nClues[1]} in Double Jeopardy, ${s.game.final ? 'Final Jeopardy ✓' : 'no Final Jeopardy'}.</p>
+       ${(s.warnings || []).map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}`
+    : '<p class="muted">No game loaded.</p>';
+
+  const base = s.urls[0] || location.origin;
+  const link = (label, path, online) => `<tr><td>${online == null ? '' : `<span class="dot ${online ? 'on' : ''}"></span>`}${label}</td><td><code>${esc(base + path)}</code></td></tr>`;
+  $('links').innerHTML =
+    link('Game board', '/board', s.boards) +
+    s.players.map((p, i) => link(`${esc(p.name)} — contestant`, `/contestant?p=${i + 1}`, s.online[i].contestant) +
+                           link(`${esc(p.name)} — podium`, `/podium?p=${i + 1}`, s.online[i].podium)).join('') +
+    (s.urls.length > 1 ? `<tr><td colspan="2" class="muted">Other addresses for this Mac: ${s.urls.slice(1).map(esc).join(', ')}</td></tr>` : '') +
+    `<tr><td colspan="2"><button class="sm" id="openBoard">Open the game board in a new window</button></td></tr>`;
+
+  $('buzzers').innerHTML = s.players.map((p, i) => {
+    const keys = Object.keys(s.keys).filter(k => s.keys[k] === i);
+    return `<div class="setting"><span><b>${esc(p.name)}</b> — ${keys.length ? keys.map(k => `<kbd>${esc(k)}</kbd>`).join(' ') : '<span class="muted">not set</span>'}</span>
+      <span class="row">${s.learning === i
+        ? `<b style="color:var(--gold)">Press the buzzer…</b><button class="sm" data-a="cancelLearn">Cancel</button>`
+        : `<button class="sm primary" data-a="learnKey" data-i="${i}">Learn</button><button class="sm" data-a="clearKey" data-i="${i}" ${keys.length ? '' : 'disabled'}>Clear</button>`}</span></div>`;
+  }).join('');
+
+  const li = s.lastInput;
+  $('lastin').innerHTML = li ? `${esc(li.code)} → ${li.player != null ? esc(s.players[li.player].name) : '<span style="color:var(--warn)">not assigned</span>'}` : 'Press any buzzer…';
+
+  const st = s.settings;
+  const num = (k, label, help) => `<div class="setting"><span>${label}<br><span class="muted" style="font-size:12px">${help}</span></span><input type="number" min="0" id="set_${k}" data-set="${k}" value="${st[k]}"></div>`;
+  const chk = (k, label, help) => `<div class="setting"><span>${label}<br><span class="muted" style="font-size:12px">${help}</span></span><input type="checkbox" id="set_${k}" data-set="${k}" ${st[k] ? 'checked' : ''}></div>`;
+  $('settings').innerHTML =
+    num('buzzWindow', 'Seconds to buzz in', 'After you open the buzzers. 0 = no limit.') +
+    num('answerTime', 'Seconds to answer', 'After buzzing in — the podium countdown lights.') +
+    num('finalTime', 'Final Jeopardy think time', 'Seconds.') +
+    chk('autoReopen', 'Reopen buzzers after a wrong answer', 'For the other players, automatically.') +
+    chk('phoneBuzz', 'Buzz button on contestant phones', 'Handy for testing before your USB buzzers work.') +
+    chk('boardScores', 'Show scores on the game board', 'A strip along the bottom, if you have no podium screens.');
+}
+
+// ------------------------------------------------------------ events
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (b) b.blur(); // so a buzzer that sends Space/Enter can't "click" it again
+
+  const tab = e.target.closest('[data-tab]');
+  if (tab) {
+    document.querySelectorAll('[data-tab]').forEach(t => t.classList.toggle('on', t === tab));
+    $('game').classList.toggle('hidden', tab.dataset.tab !== 'game');
+    $('setup').classList.toggle('hidden', tab.dataset.tab !== 'setup');
+    return;
+  }
+
+  const clue = e.target.closest('[data-clue]');
+  if (clue) {
+    const [c, r] = clue.dataset.clue.split(',').map(Number);
+    const s = J.state;
+    if (s.used[`${s.round}-${c}-${r}`]) {
+      if (confirm('This clue was already played. Put it back on the board?')) act('unuseClue', { c, r });
+      return;
+    }
+    if (s.view === 'clue' && s.clue && !s.clue.answerShown && !confirm('A clue is still in play. Leave it and open this one?')) return;
+    act('selectClue', { c, r });
+    return;
+  }
+
+  const a = e.target.closest('[data-a]');
+  if (a) {
+    const d = a.dataset, data = {};
+    if (d.i != null) data.i = Number(d.i);
+    if (d.delta != null) data.delta = Number(d.delta);
+    if (d.correct != null) data.correct = !!d.correct;
+    if (d.id != null) data.id = d.id;
+    act(d.a, data);
+    return;
+  }
+
+  const sc = e.target.closest('[data-editscore]');
+  if (sc) {
+    const i = Number(sc.dataset.editscore);
+    const v = prompt(`New score for ${J.state.players[i].name}:`, J.state.players[i].score);
+    if (v != null) act('setScore', { i, score: v });
+    return;
+  }
+
+  if (e.target.id === 'ddGo') act('ddWager', { amount: $('ddw').value });
+  if (e.target.id === 'ddTrue') {
+    const s = J.state; act('ddWager', { amount: Math.max(s.players[s.clue.ddPlayer].score, s.roundMax) });
+  }
+  if (e.target.id === 'openBoard') window.open('/board', 'jeopardy-board', 'width=1280,height=720');
+  if (e.target.id === 'bNew' && confirm('Reset all scores and put every clue back on the board?')) act('newGame');
+});
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.name != null) act('setName', { i: Number(t.dataset.name), name: t.value });
+  if (t.dataset.set) act('setting', { key: t.dataset.set, value: t.type === 'checkbox' ? t.checked : t.value });
+});
+
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (e.key !== 'Enter') return;
+  if (t.id === 'ddw') act('ddWager', { amount: t.value });
+  if (t.dataset.fw != null) { act('finalSetWager', { i: Number(t.dataset.fw), amount: t.value }); t.value = ''; }
+  if (t.dataset.name != null) t.blur();
+});
+
+// load a game file
+async function loadFile(f) {
+  if (!f) return;
+  const text = await f.text();
+  const r = await act('loadGame', { text, name: f.name });
+  if (!r.ok) return;
+  toast(r.warnings.length ? `Loaded ${f.name} with ${r.warnings.length} warning(s) — see below` : `Loaded ${f.name}`);
+  $('toast').style.background = r.warnings.length ? 'var(--warn)' : 'var(--good)';
+  setTimeout(() => ($('toast').style.background = ''), 3600);
+}
+$('file').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value = ''; });
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+
+// the "pinged" highlight fades on its own
+setInterval(() => { if (J.state && J.now() - J.state.ping.at < 800) J.keepFocus(() => renderPlayers(J.state)); }, 200);
+
+J.connect('control', null, render);
+J.forwardBuzzers();
+</script>
+</body>
+</html>

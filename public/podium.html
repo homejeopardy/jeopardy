@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Jeopardy Podium</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { overflow: hidden; background: #111; }
+  #pod {
+    position: fixed; inset: 0; display: grid; grid-template-rows: 1.25fr auto 1fr;
+    gap: 2.5vmin; padding: 3vmin; background: linear-gradient(#2a2a2a, #111);
+    transition: opacity .2s;
+  }
+  #pod.locked { opacity: .45; }
+  .panel {
+    background: var(--blue); border-radius: 1.2vmin; display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 6vmin rgba(0,0,0,.5), 0 0 0 .6vmin #000; overflow: hidden; text-align: center;
+  }
+  #score { font-size: min(22vmin, 16vw); color: #fff; text-shadow: .6vmin .6vmin 0 #000; }
+  #name { font: min(14vmin, 11vw) var(--hand-font); padding: 0 3vw; line-height: 1.05; overflow-wrap: anywhere; }
+  #name small { display: block; font-size: .45em; opacity: .85; margin-top: 1vmin; }
+  #lights { display: grid; grid-template-columns: repeat(9, 1fr); gap: 1.4vmin; height: 7vmin; }
+  #lights i {
+    display: block; border-radius: .8vmin; background: #3a2d10;
+    box-shadow: inset 0 0 1.5vmin rgba(0,0,0,.7); transition: background .05s, box-shadow .05s;
+  }
+  #lights i.on { background: radial-gradient(#fffbe0, #ffc400 70%); box-shadow: 0 0 3.5vmin #ffc400, 0 0 1vmin #fff; }
+  #pod.ring .panel { box-shadow: inset 0 0 6vmin rgba(0,0,0,.5), 0 0 0 .8vmin #fff, 0 0 5vmin #fff; }
+  #pod.ping #lights i { background: #ffc400; box-shadow: 0 0 3vmin #ffc400; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="/common.js"></script>
+<script>
+const pnum = parseInt(Q.get('p'), 10);
+const app = document.getElementById('app');
+
+if (!(pnum >= 1 && pnum <= 3)) {
+  app.innerHTML = `<div class="picker"><h1 class="logo">Podium display</h1><p>Which podium is this?</p>
+    ${[1, 2, 3].map(i => `<a href="?p=${i}">Player ${i}</a>`).join('')}</div>`;
+} else {
+  const me = pnum - 1;
+  app.innerHTML = `<div id="pod">
+      <div class="panel"><div id="score" class="money"></div></div>
+      <div id="lights">${'<i></i>'.repeat(9)}</div>
+      <div class="panel"><div id="name"></div></div>
+    </div>`;
+  const pod = document.getElementById('pod');
+  const lights = [...document.querySelectorAll('#lights i')];
+  let lastPing = null;
+
+  J.connect('podium', me, s => {
+    const p = s.players[me];
+    const sc = document.getElementById('score');
+    sc.textContent = J.money(p.score);
+    sc.classList.toggle('neg', p.score < 0);
+
+    let sub = '';
+    const f = s.final;
+    if (f && f.shown[me] && f.answers[me] != null) sub = `<small>“${J.esc(f.answers[me] || '—')}”</small>`;
+    document.getElementById('name').innerHTML = J.esc(p.name) + sub;
+
+    const c = s.view === 'clue' ? s.clue : null;
+    pod.classList.toggle('locked', !!(c && c.locked.includes(me) && !c.answer));
+    document.title = `Podium ${pnum} — ${p.name}`;
+
+    // buzzer test: flash when this player's buzzer is pressed outside a clue
+    if (lastPing === null) lastPing = s.ping.seq;
+    else if (s.ping.seq !== lastPing) {
+      lastPing = s.ping.seq;
+      if (s.ping.p === me) { pod.classList.add('ping'); setTimeout(() => pod.classList.remove('ping'), 500); }
+    }
+  });
+
+  // Countdown lights: all 9 light when you ring in, then go out from the outside in.
+  (function tick() {
+    const s = J.state;
+    let level = 0, ring = false;
+    const c = s && s.view === 'clue' ? s.clue : null;
+    if (c && !c.answer) {
+      if (c.buzzed === me && c.buzz === 'buzzed') {
+        ring = true;
+        if (c.ansTimer) level = Math.ceil(J.fraction(c.ansTimer) * 5);
+      }
+      if (c.dd && c.ddPlayer === me && c.shown) ring = true;
+    }
+    lights.forEach((l, i) => l.classList.toggle('on', Math.abs(i - 4) < level));
+    pod.classList.toggle('ring', ring);
+    requestAnimationFrame(tick);
+  })();
+}
+</script>
+</body>
+</html>

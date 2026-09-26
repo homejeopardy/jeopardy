@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Jeopardy Contestant</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: var(--blue-dark); -webkit-tap-highlight-color: transparent; }
+  #wrap { max-width: 640px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 16px 24px; gap: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--blue); border-radius: 12px; padding: 14px 18px; box-shadow: inset 0 0 30px rgba(0,0,0,.4); }
+  header .n { font: 30px/1.1 var(--hand-font); overflow-wrap: anywhere; }
+  header .money { font-size: 40px; }
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; text-align: center; }
+  .msg { font-size: 20px; opacity: .85; line-height: 1.4; }
+  .big { font: 800 34px var(--value-font); text-transform: uppercase; }
+  .clue-text { font-size: 22px; background: var(--blue); padding: 18px; border-radius: 10px; text-align: left; }
+  label { font-size: 16px; opacity: .85; display: block; margin-bottom: 6px; text-align: left; }
+  input, textarea {
+    width: 100%; font-size: 24px; padding: 14px; border-radius: 10px; border: 2px solid #fff4; background: #fff; color: #000;
+    font-family: inherit;
+  }
+  textarea { min-height: 120px; font-family: var(--hand-font); font-size: 28px; resize: vertical; }
+  button.go { font-size: 22px; font-weight: 700; padding: 16px; border: 0; border-radius: 10px; background: var(--gold); color: #000; width: 100%; }
+  button.go:disabled { opacity: .5; }
+  .note { font-size: 15px; opacity: .75; min-height: 1.2em; }
+  .err { color: #ffb3b3; }
+  .ok { color: #9ff0bb; }
+  .timer { font: 800 56px var(--value-font); color: var(--gold); }
+  #buzz {
+    width: min(78vw, 360px); aspect-ratio: 1; margin: 0 auto; border-radius: 50%; border: 10px solid #fff3;
+    background: radial-gradient(circle at 35% 30%, #ff8a8a, #d40000 60%, #7a0000); color: #fff;
+    font: 800 44px var(--value-font); box-shadow: 0 12px 0 #500, 0 20px 40px #000a; touch-action: manipulation; user-select: none;
+  }
+  #buzz:active { transform: translateY(8px); box-shadow: 0 4px 0 #500, 0 8px 20px #000a; }
+  #buzz.open { border-color: #fff; box-shadow: 0 12px 0 #500, 0 0 40px #fff8; }
+  #buzz.in { background: radial-gradient(circle at 35% 30%, #fff6c0, #ffc400 60%, #a07000); color: #000; }
+  #buzz.out { filter: grayscale(1) brightness(.6); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="/common.js"></script>
+<script>
+const pnum = parseInt(Q.get('p'), 10);
+const app = document.getElementById('app');
+
+if (!(pnum >= 1 && pnum <= 3)) {
+  app.innerHTML = `<div class="picker"><h1 class="logo">JEOPARDY!</h1><p>Which player are you?</p>
+    ${[1, 2, 3].map(i => `<a href="?p=${i}">Player ${i}</a>`).join('')}</div>`;
+} else {
+  const me = pnum - 1;
+  app.innerHTML = `<div id="wrap"><header><div class="n" id="hn"></div><div class="money" id="hs"></div></header><main id="main"></main></div>`;
+  const main = document.getElementById('main');
+  let lastHtml = '', note = '', noteCls = '', answerTimer = null;
+
+  const setNote = (text, cls = '') => { note = text; noteCls = cls; const n = document.getElementById('note'); if (n) { n.textContent = text; n.className = 'note ' + cls; } };
+
+  function body(s) {
+    const p = s.players[me];
+    const f = s.final;
+    if (s.view === 'title') {
+      return `<div class="big">Welcome!</div>
+        <div><label for="nm">Your name on the podium</label><input id="nm" maxlength="30" autocomplete="off" placeholder="${J.esc(p.name)}"></div>
+        <button class="go" data-do="name">Save name</button>
+        <div class="note ${noteCls}" id="note">${J.esc(note)}</div>
+        <div class="msg">The game will start soon.</div>`;
+    }
+    if (s.view === 'end') return `<div class="big">Game over!</div><div class="msg">Final score: ${J.money(p.score)}</div>`;
+    if (s.view === 'final' && f) {
+      if (!f.eligible[me]) return `<div class="big">Final Jeopardy!</div><div class="msg">You need more than $0 to play Final Jeopardy. Thanks for playing!</div>`;
+      if (f.step === 'category') {
+        const w = f.wagers[me];
+        return `<div class="big">Final Jeopardy!</div>
+          <div class="msg">Category:</div><div class="big" style="color:var(--gold)">${J.esc(f.category)}</div>
+          <div><label for="wg">Your wager ($0 – ${J.money(Math.max(0, p.score))})</label><input id="wg" inputmode="numeric" autocomplete="off" placeholder="0"></div>
+          <button class="go" data-do="wager">${w != null ? 'Change wager' : 'Lock in wager'}</button>
+          <div class="note ${noteCls}" id="note">${w != null ? `Wager locked in: ${J.money(w)}` : J.esc(note)}</div>`;
+      }
+      if (f.step === 'clue' || f.step === 'thinking') {
+        return `<div class="timer" data-timer id="ft"></div>
+          <div class="clue-text">${J.esc(f.text)}</div>
+          <div><label for="ans">Your response (saves as you type)</label><textarea id="ans" autocomplete="off" autocapitalize="sentences" placeholder="What is…"></textarea></div>
+          <div class="note ${noteCls}" id="note">${J.esc(note)}</div>`;
+      }
+      if (f.step === 'locked' || (f.step === 'reveal' && !f.results[me])) {
+        return `<div class="big">Pencils down!</div><div class="msg">Your response:</div>
+          <div class="clue-text" style="font-family:var(--hand-font);text-transform:none">${J.esc(f.answers[me] || '(nothing)')}</div>
+          <div class="msg">Wager: ${J.money(f.wagers[me] ?? 0)}</div>`;
+      }
+      if (f.step === 'reveal' && f.results[me]) {
+        return `<div class="big" style="color:${f.results[me].correct ? 'var(--green)' : 'var(--red)'}">${f.results[me].correct ? 'Correct!' : 'Incorrect'}</div>
+          <div class="msg">Score: ${J.money(p.score)}</div>`;
+      }
+    }
+    // regular play
+    const c = s.view === 'clue' ? s.clue : null;
+    let status = 'Watch the board!';
+    let cls = '';
+    if (c) {
+      if (c.dd && c.ddPlayer === me) status = 'Daily Double — it’s your turn!';
+      else if (c.dd) status = 'Daily Double!';
+      else if (c.answer) status = '';
+      else if (c.buzzed === me) { status = 'You’re in! Answer now.'; cls = 'in'; }
+      else if (c.locked.includes(me)) { status = 'Locked out on this clue.'; cls = 'out'; }
+      else if (c.buzz === 'open') { status = 'Buzzers are open!'; cls = 'open'; }
+    } else if (s.view === 'board' && s.control === me) status = 'You have control of the board. Pick a clue!';
+    return (s.settings.phoneBuzz ? `<button id="buzz" class="${cls}" data-do="buzz">BUZZ</button>` : '') +
+      `<div class="msg">${J.esc(status)}</div>`;
+  }
+
+  J.connect('contestant', me, s => {
+    const p = s.players[me];
+    document.getElementById('hn').textContent = p.name;
+    const hs = document.getElementById('hs');
+    hs.textContent = J.money(p.score); hs.classList.toggle('neg', p.score < 0);
+    document.title = `${p.name} — Jeopardy`;
+
+    const html = body(s);
+    if (html !== lastHtml) {
+      const hadAns = !!document.getElementById('ans');
+      J.keepFocus(() => { main.innerHTML = html; });
+      lastHtml = html;
+      const ans = document.getElementById('ans');
+      if (ans && !hadAns) ans.value = (s.final && s.final.answers[me]) || '';
+    }
+    const ft = document.getElementById('ft');
+    if (ft) ft._timer = s.final && s.final.step === 'thinking' ? s.final.timer : null;
+  });
+
+  main.addEventListener('click', async e => {
+    const b = e.target.closest('[data-do]');
+    if (!b) return;
+    const what = b.dataset.do;
+    if (what === 'name') {
+      const v = document.getElementById('nm').value.trim();
+      if (!v) return setNote('Type a name first.', 'err');
+      const r = await J.send('setName', { name: v });
+      setNote(r.ok ? 'Saved!' : r.error, r.ok ? 'ok' : 'err');
+    }
+    if (what === 'wager') {
+      const v = document.getElementById('wg').value;
+      const r = await J.send('wager', { amount: v });
+      if (!r.ok) setNote(r.error, 'err');
+      else document.getElementById('wg').value = '';
+    }
+  });
+
+  // buzz on touch-down, not on release — every millisecond counts
+  main.addEventListener('pointerdown', e => { if (e.target.closest('#buzz')) { e.preventDefault(); J.send('buzz'); } });
+
+  // Final Jeopardy response saves as you type
+  main.addEventListener('input', e => {
+    if (e.target.id !== 'ans') return;
+    clearTimeout(answerTimer);
+    setNote('Saving…');
+    answerTimer = setTimeout(async () => {
+      const r = await J.send('answer', { text: e.target.value });
+      setNote(r.ok ? 'Saved ✓' : r.error, r.ok ? 'ok' : 'err');
+    }, 250);
+  });
+  main.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'wg') main.querySelector('[data-do="wager"]').click();
+    if (e.key === 'Enter' && e.target.id === 'nm') main.querySelector('[data-do="name"]').click();
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# live game state (scores, buzzer keys) — written while playing
+saved-game.json
+.DS_Store
+node_modules/

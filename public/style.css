@@ -1,0 +1,46 @@
+:root {
+  --blue: #060ce9;
+  --blue-deep: #030785;
+  --blue-dark: #02053a;
+  --gold: #ffcc00;
+  --gold-deep: #d69f4c;
+  --red: #ff4b4b;
+  --green: #2fd66b;
+  --ink: #fff;
+  --value-font: "Helvetica Neue", "Arial Narrow", Impact, sans-serif;
+  --clue-font: "ITC Korinna", Korinna, Georgia, "Times New Roman", serif;
+  --hand-font: "Bradley Hand", "Marker Felt", "Chalkboard SE", "Comic Sans MS", cursive;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: #000; color: var(--ink); font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+
+/* Shown when the connection to the game computer drops */
+body.offline::after {
+  content: "Reconnecting to the game computer…";
+  position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
+  background: #b00020; color: #fff; padding: 8px 16px; border-radius: 6px;
+  font: 600 14px -apple-system, sans-serif; z-index: 1000;
+}
+
+.logo {
+  font-family: var(--value-font);
+  font-weight: 900; font-stretch: condensed; font-style: italic;
+  color: #fff; letter-spacing: 0.02em;
+  text-shadow: 0.04em 0.04em 0 var(--blue-deep), 0.08em 0.08em 0 #000;
+}
+
+.clue-text {
+  font-family: var(--clue-font);
+  font-weight: 700; text-transform: uppercase; color: #fff;
+  text-shadow: 0.06em 0.06em 0 #000;
+  line-height: 1.25;
+}
+
+.money { font-family: var(--value-font); font-weight: 900; font-stretch: condensed; font-variant-numeric: tabular-nums; }
+.neg { color: var(--red) !important; }
+
+.picker { min-height: 100%; display: grid; place-content: center; gap: 16px; padding: 24px; background: var(--blue-dark); text-align: center; }
+.picker h1 { margin: 0 0 8px; font-size: 42px; }
+.picker a { display: block; padding: 18px 40px; background: var(--blue); color: #fff; text-decoration: none; font-size: 24px; font-weight: 700; border-radius: 10px; }
