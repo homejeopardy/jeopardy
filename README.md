@@ -2,16 +2,16 @@
 
 A classroom Jeopardy game with four kinds of screens.
 
-**Play it: https://homejeopardy.github.io/jeopardy/**
+**Play it: https://masterworks.catherine-crump.com/**
 
 Open that page on each device and choose what it is:
 
 | Screen | Page | Runs on |
 |---|---|---|
-| Host control panel | [control.html](https://homejeopardy.github.io/jeopardy/control.html) | the computer the USB buzzers are plugged into |
-| Game board | [board.html](https://homejeopardy.github.io/jeopardy/board.html) | projector / TV |
-| Contestant | [contestant.html](https://homejeopardy.github.io/jeopardy/contestant.html) | each player's phone or tablet |
-| Podium display | [podium.html](https://homejeopardy.github.io/jeopardy/podium.html) | a tablet at each podium |
+| Host control panel | [control.html](https://masterworks.catherine-crump.com/control.html) | the computer the USB buzzers are plugged into |
+| Game board | [board.html](https://masterworks.catherine-crump.com/board.html) | projector / TV |
+| Contestant | [contestant.html](https://masterworks.catherine-crump.com/contestant.html) | each player's phone or tablet |
+| Podium display | [podium.html](https://masterworks.catherine-crump.com/podium.html) | a tablet at each podium |
 
 The control panel shows a **room code**. The other screens type it in, or scan a QR code from **Setup → Devices**. Screens connect straight to the control panel over the internet ([PeerJS](https://peerjs.com)). The control panel runs the game and saves it in that browser, so keep it open. Reloading it is fine.
 
