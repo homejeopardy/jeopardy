@@ -63,7 +63,7 @@ function isLocal(req) {
   return a === '127.0.0.1' || a === '::1' || lanAddresses().includes(a);
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.jpg': 'image/jpeg', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const PAGES = { '/': 'index.html', '/control': 'control.html', '/board': 'board.html', '/contestant': 'contestant.html', '/podium': 'podium.html', '/control.html': 'control.html' };
 
 function serveFile(res, file, extraHeaders = {}) {
@@ -122,7 +122,7 @@ const server = http.createServer((req, res) => {
     return serveFile(res, path.join(PUB, PAGES[p]));
   }
   // Only the web pages and their assets — never server.js or the saved game.
-  if (!/^\/[\w-]+\.(html|js|css|csv)$/.test(p) || p === '/server.js') { res.writeHead(404); res.end('Not found'); return; }
+  if (!/^\/(logos\/)?[\w-]+\.(html|js|css|csv|jpg|png)$/.test(p) || p === '/server.js') { res.writeHead(404); res.end('Not found'); return; }
   serveFile(res, path.join(PUB, p));
 });
 

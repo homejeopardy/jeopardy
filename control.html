@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jeopardy Control</title>
-<link rel="stylesheet" href="style.css?v=20261111c">
+<link rel="stylesheet" href="style.css?v=20261111e">
 <style>
   :root {
     --bg: #0d1020; --panel: #171b33; --panel2: #1f2544; --line: #2d3560; --text: #e8ebff; --muted: #9aa3d0;
@@ -158,7 +158,8 @@ FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
       <p class="muted">round: <b>J</b> (Jeopardy), <b>DJ</b> (Double Jeopardy) or <b>FJ</b> (Final — one row).<br>
       Up to 6 categories × 5 clues per round, in the order you want them on the board.<br>
       value is optional (defaults to 200–1000 / 400–2000).<br>
-      daily_double: put <b>yes</b> on the clues you want. If you mark none, 1 is hidden in J and 2 in DJ at random.</p>
+      daily_double: put <b>yes</b> on the clues you want. If you mark none, 1 is hidden in J and 2 in DJ at random.<br>
+      Logo: add a row <b>LOGO,Easyish</b> or <b>LOGO,Black Pine Circle</b> to use that title-card artwork.</p>
     </details>
   </div>
 
@@ -198,11 +199,11 @@ FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
 <div id="toast"></div>
 <div id="qr"></div>
 
-<script src="mode.js?v=20261111c"></script>
+<script src="mode.js?v=20261111e"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="engine.js?v=20261111c"></script>
-<script src="common.js?v=20261111c"></script>
+<script src="engine.js?v=20261111e"></script>
+<script src="common.js?v=20261111e"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = J.esc, money = J.money;
@@ -471,7 +472,10 @@ function renderSetup(s) {
     num('finalTime', 'Final Jeopardy think time', 'Seconds.') +
     chk('autoReopen', 'Reopen buzzers after a wrong answer', 'For the other players, automatically.') +
     chk('phoneBuzz', 'Buzz button on contestant phones', 'Handy for testing before your USB buzzers work.') +
-    chk('boardScores', 'Show scores on the game board', 'A strip along the bottom, if you have no podium screens.');
+    chk('boardScores', 'Show scores on the game board', 'A strip along the bottom, if you have no podium screens.') +
+    `<div class="setting"><span>Logo artwork<br><span class="muted" style="font-size:12px">Title screen, category reveals and Final. A game file can set this with a <b>LOGO</b> row.</span></span>
+      <select id="set_logoSet" data-set="logoSet"><option value="">Plain JEOPARDY! text</option>
+      ${Object.entries(LOGO_SETS).map(([k, v]) => `<option value="${k}" ${st.logoSet === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`;
 }
 
 // ------------------------------------------------------------ events

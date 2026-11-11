@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jeopardy Board</title>
-<link rel="stylesheet" href="style.css?v=20261111c">
+<link rel="stylesheet" href="style.css?v=20261111e">
 <style>
   body { overflow: hidden; cursor: default; }
   .screen { position: fixed; inset: 0; display: none; }
@@ -14,6 +14,8 @@
   /* ---- title ---- */
   #title { background: radial-gradient(ellipse at center, #1a2cff 0%, var(--blue-deep) 55%, var(--blue-dark) 100%); align-items: center; justify-content: center; flex-direction: column; }
   #title .logo { font-size: 15vw; }
+  #title.art { background: #000 center / cover no-repeat; }
+  #title.art > * { display: none; }
   #title .sub { margin-top: 2vh; font: 700 2.4vw var(--clue-font); color: var(--gold); letter-spacing: 0.3em; text-transform: uppercase; }
 
   /* ---- board ---- */
@@ -55,9 +57,22 @@
   .lights i { display: block; height: 100%; background: linear-gradient(#fff6c0, #ffb800); box-shadow: 0 0 2vh #ffcc00; transform-origin: center; transform: scaleX(0); }
 
   /* ---- category reveal, full screen ---- */
-  #catcard { background: var(--blue); align-items: center; justify-content: center; text-align: center; padding: 6vh 6vw;
-    box-shadow: inset 0 0 0 .25vh #000, inset 0 0 12vh rgba(0,0,0,.45); }
-  #catcard .name { font: 900 9vw/1.05 var(--value-font); font-stretch: condensed; text-transform: uppercase; color: #fff;
+  /* logo panel fades in → flips to a category → slides to the next logo panel → flips … */
+  #catcard { background: #000; overflow: hidden; }
+  .cpanel { position: absolute; inset: 0; perspective: 140vw; }
+  .cflip { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .cflip.flipped { transform: rotateY(180deg); }
+  .cface {
+    position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    display: flex; align-items: center; justify-content: center; text-align: center; padding: 6vh 6vw;
+    background: var(--blue); box-shadow: inset 0 0 0 .4vh #000, inset 0 0 12vh rgba(0,0,0,.45);
+  }
+  .cface.front { background: radial-gradient(ellipse at center, #1a2cff 0%, var(--blue-deep) 60%, var(--blue-dark) 100%); }
+  .cface.back { transform: rotateY(180deg); }
+  .cface .logo { font-size: 12vw; line-height: .95; }
+  .cface .logo.long { font-size: 9vw; }
+  .cface img.cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cface .name { font: 900 9vw/1.05 var(--value-font); font-stretch: condensed; text-transform: uppercase; color: #fff;
     text-shadow: .5vw .5vw 0 #000; overflow-wrap: anywhere; }
 
   /* ---- daily double ---- */
@@ -69,6 +84,10 @@
   /* ---- final ---- */
   #final { background: var(--blue); flex-direction: column; align-items: center; justify-content: center; padding: 6vh 7vw; text-align: center; }
   #final .logo { font-size: 7vw; margin-bottom: 5vh; }
+  #final .fl-logo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: flout 1s ease 3s forwards; }
+  #final .category.after { animation: flin 1s ease 3.3s both; }
+  @keyframes flout { to { opacity: 0; } }
+  @keyframes flin { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
   #final .category { font: 800 6vw var(--value-font); font-stretch: condensed; text-transform: uppercase; text-shadow: .3vw .3vw 0 #000; }
   #final .clue-text { font-size: 4.6vw; }
   #final .answer { margin-top: 5vh; font: 700 3.4vw var(--clue-font); color: var(--gold); text-transform: uppercase; text-shadow: .2vw .2vw 0 #000; }
@@ -115,7 +134,7 @@
   <div class="who"></div>
   <div class="lights"><i data-timerbar></i></div>
 </div>
-<div id="catcard" class="screen"><div class="name"></div></div>
+<div id="catcard" class="screen"></div>
 <div id="dd" class="screen"><div class="logo">DAILY<br>DOUBLE</div><div class="wager"></div></div>
 <div id="final" class="screen"></div>
 <div id="end" class="screen"></div>
@@ -123,9 +142,9 @@
 <button id="fs">Full screen</button>
 <div id="unlock"><b>Click to start the game board</b><span>This turns on sound. Double-click the board any time for full screen.</span></div>
 
-<script src="mode.js?v=20261111c"></script>
+<script src="mode.js?v=20261111e"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="common.js?v=20261111c"></script>
+<script src="common.js?v=20261111e"></script>
 <script>
 // ------------------------------------------------------------ sound (generated, no audio files)
 const Snd = {
@@ -158,6 +177,8 @@ const Snd = {
       for (let i = 0; i < 12; i++) this.tone(this.midi(84 + (i % 4) * 3), t + 0.9 + i * 0.05, 0.08, { vol: 0.08 });
     } else if (id === 'final') {
       [60, 64, 67, 72].forEach((n, i) => this.tone(this.midi(n), t + i * 0.12, 1.4 - i * 0.12, { type: 'triangle', vol: 0.12 }));
+    } else if (id === 'slide') {
+      this.tone(700, t, 0.35, { type: 'sine', vol: 0.06, glide: 180 });
     } else if (id === 'reveal') {
       this.tone(320, t, 0.28, { type: 'sine', vol: 0.12, glide: 900 });
       this.tone(this.midi(79), t + 0.22, 0.35, { type: 'triangle', vol: 0.1 });
@@ -198,7 +219,7 @@ const Snd = {
 
 // ------------------------------------------------------------ rendering
 const $ = id => document.getElementById(id);
-let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [], zoom = null, seenCats = null, lastFocus = null;
+let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [], zoom = null, seenCats = null, catSeen = null, catTimers = [], fillEndsAt = 0;
 
 function show(id) {
   if (zoom && id !== zoom.el.id) stopZoom();
@@ -208,12 +229,18 @@ function show(id) {
 function render(s) {
   document.body.classList.toggle('scores', !!s.settings.boardScores && s.view !== 'end');
   renderScores(s);
+  preloadLogos(s.settings.logoSet);
+  const titleArt = logoUrl(s.settings.logoSet, 0);
+  $('title').classList.toggle('art', !!titleArt);
+  $('title').style.backgroundImage = titleArt ? `url("${titleArt}")` : '';
+  if (seenFill === null) seenFill = s.fillSeq; // whatever filled before this page opened doesn't replay
 
   if (s.view === 'title') { show('title'); lastClueKey = null; }
   else if (s.view === 'board') { renderBoard(s); lastClueKey = null; renderCatFocus(s); }
   else if (s.view === 'clue' && s.clue) renderClue(s);
   else if (s.view === 'final' && s.final) { renderFinal(s); show('final'); }
   else if (s.view === 'end') { renderEnd(s); show('end'); }
+  if (s.view !== 'board') { catSeen = null; catTimers.forEach(clearTimeout); catTimers = []; }
 
   // sound effects
   if (seenSfx === null) seenSfx = s.sfx.seq;
@@ -257,6 +284,7 @@ function renderBoard(s) {
   if (s.fillSeq !== seenFill) {
     seenFill = s.fillSeq;
     fillTimers.forEach(clearTimeout); fillTimers = [];
+    fillEndsAt = Date.now() + 1800;
     const tiles = [...el.querySelectorAll('.tile')];
     tiles.forEach(t => t.classList.add('hid'));
     tiles.sort(() => Math.random() - 0.5).forEach((t, i) => {
@@ -299,18 +327,71 @@ function renderClue(s) {
   else if (!zoom) show('clue'); // mid-zoom updates wait for the zoom to finish
 }
 
-// Category reveal: the category grows full screen out of its heading and stays while the host reads it.
+// Category reveal, full screen. After the board fills, the logo panel fades in. Each "Reveal next"
+// flips it to the category; from the second one on, the panel first slides (left to right) to a
+// fresh logo panel, which then flips. The host reads each one before clicking again.
+function logoHTML(s) {
+  const url = logoUrl(s.settings.logoSet, s.round);
+  if (url) return `<img class="cover" src="${url}" alt="">`;
+  const text = s.round === 1 ? 'DOUBLE<br>JEOPARDY!' : 'JEOPARDY!';
+  return `<div class="logo ${s.round === 1 ? 'long' : ''}">${text}</div>`;
+}
+function panel(s, name, flipped) {
+  const d = document.createElement('div');
+  d.className = 'cpanel';
+  d.innerHTML = `<div class="cflip ${flipped ? 'flipped' : ''}"><div class="cface front">${logoHTML(s)}</div>
+    <div class="cface back"><div class="name">${J.esc(name || '')}</div></div></div>`;
+  return d;
+}
+function flip(p) {
+  const f = p.querySelector('.cflip');
+  Snd.play('reveal');
+  const a = f.animate([{ transform: 'rotateY(0)' }, { transform: 'rotateY(180deg)' }],
+    { duration: 750, easing: 'cubic-bezier(.45, 0, .25, 1)', fill: 'forwards' });
+  a.onfinish = () => { f.classList.add('flipped'); a.cancel(); };
+}
+const later = (ms, fn) => catTimers.push(setTimeout(fn, ms));
+
 function renderCatFocus(s) {
-  const i = s.catFocus;
-  const key = i == null ? null : `${s.fillSeq}-${s.round}-${i}`;
-  if (i == null || !s.board || !s.board[i]) { lastFocus = null; show('board'); return; }
-  $('catcard').querySelector('.name').textContent = s.board[i].name;
-  if (key === lastFocus) { if (!zoom) show('catcard'); return; }
-  lastFocus = key;
-  show('board');                                   // board behind, so the card grows out of it
-  const head = $('board').querySelectorAll('.cat')[i];
-  if (head) growFrom($('catcard'), head.getBoundingClientRect(), [], () => show('catcard'));
-  else show('catcard');
+  const f = s.catFocus;
+  const prev = catSeen;
+  catSeen = { fill: s.fillSeq, round: s.round, focus: f };
+  if (f == null || !s.board || (f >= 0 && !s.board[f])) { catTimers.forEach(clearTimeout); catTimers = []; show('board'); return; }
+  const same = prev && prev.fill === s.fillSeq && prev.round === s.round;
+  if (same && prev.focus === f) return;              // nothing new; let any animation finish
+  catTimers.forEach(clearTimeout); catTimers = [];
+  const card = $('catcard');
+  const name = f >= 0 ? s.board[f].name : null;
+  const old = card.lastElementChild;               // newest panel; drop any still sliding out
+  [...card.children].forEach(c => { if (c !== old) c.remove(); });
+
+  if (f === -1) {
+    // logo panel fades in once the board has finished filling
+    card.replaceChildren(panel(s, null, false));
+    const wait = Math.max(0, fillEndsAt - Date.now());
+    if (!wait) { show('catcard'); return; }
+    show('board');
+    later(wait, () => { show('catcard'); card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 800, easing: 'ease-out' }); });
+  } else if (same && prev.focus === -1 && f === 0 && old) {
+    // first category: flip the logo panel over
+    old.querySelector('.cface.back .name').textContent = name;
+    show('catcard');
+    flip(old);
+  } else if (same && prev.focus === f - 1 && old) {
+    // next category: slide to a fresh logo panel, pause, flip
+    const next = panel(s, name, false);
+    card.appendChild(next);
+    show('catcard');
+    Snd.play('slide');
+    const o = { duration: 600, easing: 'cubic-bezier(.6, 0, .3, 1)' };
+    old.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(100%)' }], o).onfinish = () => old.remove();
+    next.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }], o);
+    later(600 + 450, () => flip(next));
+  } else {
+    // jumped (reload, undo…): just show where we are
+    card.replaceChildren(panel(s, name, f >= 0));
+    show('catcard');
+  }
 }
 
 // Grow the clue screen out of its square on the board, which stays visible behind it.
@@ -361,7 +442,14 @@ function stopZoom() {
 
 function renderFinal(s) {
   const f = s.final, el = $('final');
-  if (f.step === 'category') {
+  const finalArt = logoUrl(s.settings.logoSet, 2);
+  const key = f.step === 'category' ? `cat|${finalArt}|${f.category}` : null;
+  if (key && el.dataset.k === key) return;   // don't restart the logo → category fade
+  el.dataset.k = key || '';
+  if (f.step === 'category' && finalArt) {
+    // Final logo full screen, then it fades to the category
+    el.innerHTML = `<img class="fl-logo" src="${finalArt}" alt=""><div class="category after">${J.esc(f.category)}</div>`;
+  } else if (f.step === 'category') {
     el.innerHTML = `<div class="logo">FINAL JEOPARDY!</div><div class="category">${J.esc(f.category)}</div>`;
   } else if (f.step === 'reveal' && f.cur != null) {
     const i = f.cur, res = f.results[i], resp = f.answers[i];

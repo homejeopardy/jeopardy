@@ -26,6 +26,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
         autoReopen: true, // reopen buzzers for the others after a wrong answer
         phoneBuzz: false, // show a buzz button on contestant devices (for testing without USB buzzers)
         boardScores: false, // show a score strip along the bottom of the game board
+        logoSet: '',        // title-card artwork in logos/ ('' = plain text logo)
       },
       view: 'title', // title | board | clue | final | end
       round: 0,      // 0 = Jeopardy, 1 = Double Jeopardy, 2 = Final
@@ -33,7 +34,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       used: {},      // "round-c-r" -> true
       filledRound: -1,
       catsShown: null, // categories revealed on this round's board (null = all)
-      catFocus: null,  // category shown full screen right now
+      catFocus: null,  // full-screen reveal: null = board, -1 = logo panel, n = category n
       fillSeq: 0,
       clue: null,
       final: null,
@@ -140,10 +141,12 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
     }
     const rounds = [new Map(), new Map()];
     let final = null;
+    let logo = '';
     const warnings = [];
     rows.slice(1).forEach((r, n) => {
       const g = k => (ci[k] >= 0 ? (r[ci[k]] || '').trim() : '');
       const rd = g('round').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (rd === 'LOGO') { logo = slug(g('cat')); return; } // e.g. LOGO,Easyish picks logos/easyish*.jpg
       const idx = ROUND_NAMES.findIndex(names => names.includes(rd));
       if (idx < 0) { warnings.push(`Row ${n + 2}: unknown round "${g('round')}" — use J, DJ or FJ. Skipped.`); return; }
       if (idx === 2) {
@@ -191,8 +194,10 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
     if (!out[0].categories.length) throw new Error('No Jeopardy-round clues found (rows with round = J).');
     if (!out[1].categories.length) warnings.push('No Double Jeopardy clues — the game will go straight to Final Jeopardy.');
     if (!final) warnings.push('No Final Jeopardy row (round = FJ) — the game will end after the last round.');
-    return { game: { rounds: out, final }, warnings };
+    return { game: { rounds: out, final, logo }, warnings };
   }
+
+  const slug = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
   function shuffle(a) {
     a = a.slice();
@@ -219,7 +224,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
     S.view = 'board';
     S.clue = null;
     S.catFocus = null;
-    if (S.filledRound !== S.round) { S.filledRound = S.round; S.catsShown = 0; S.fillSeq++; sfx('fill'); }
+    if (S.filledRound !== S.round) { S.filledRound = S.round; S.catsShown = 0; S.catFocus = -1; S.fillSeq++; sfx('fill'); }
   }
 
   function openBuzzers() {
@@ -302,6 +307,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       const r = parseGame(String(text || ''));
       clearTimers();
       S.game = r.game; S.warnings = r.warnings; S.gameName = name || 'game.csv';
+      if (r.game.logo) S.settings.logoSet = r.game.logo;
       S.used = {}; S.round = 0; S.view = 'title'; S.clue = null; S.final = null; S.filledRound = -1;
       history.length = 0;
       return { warnings: r.warnings };
@@ -315,7 +321,8 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
     clearKey({ i }) { for (const k of Object.keys(S.keys)) if (S.keys[k] === i) delete S.keys[k]; },
     setting({ key, value }) {
       need(key in S.settings, 'Unknown setting');
-      S.settings[key] = typeof S.settings[key] === 'boolean' ? !!value : Math.max(0, Number(value) || 0);
+      const t = typeof S.settings[key];
+      S.settings[key] = t === 'boolean' ? !!value : t === 'string' ? slug(value) : Math.max(0, Number(value) || 0);
     },
     playSound({ id }) { sfx(id); },
 
@@ -327,8 +334,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       need(S.catsShown != null && S.catsShown < n, 'All categories are already showing');
       if (S.view !== 'board') { clearTimers(); enterBoard(); }
       S.catsShown++;
-      S.catFocus = S.catsShown - 1; // full screen while the host reads it
-      sfx('reveal');
+      S.catFocus = S.catsShown - 1; // full screen while the host reads it (the board plays the slide/flip and its sounds)
     },
     revealAllCategories() { S.catsShown = null; S.catFocus = null; },
     hideCategory() { S.catFocus = null; },
@@ -521,7 +527,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   function publicView(cl) {
     const v = {
       view: S.view, round: S.round, control: S.control, fillSeq: S.fillSeq, sfx: S.sfx, ping,
-      settings: { phoneBuzz: S.settings.phoneBuzz, boardScores: S.settings.boardScores, finalTime: S.settings.finalTime },
+      settings: { phoneBuzz: S.settings.phoneBuzz, boardScores: S.settings.boardScores, finalTime: S.settings.finalTime, logoSet: S.settings.logoSet },
       players: S.players.map(p => ({ name: p.name, score: p.score })),
       board: null, clue: null, final: null,
     };

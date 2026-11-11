@@ -11,6 +11,18 @@ const Q = new URLSearchParams(location.search);
 const PEER_PREFIX = 'hj-jeopardy-';
 const ROOM_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ'; // no I, L, O — easy to read aloud
 
+// Title-card artwork in logos/: <set>.jpg, <set>-double.jpg, <set>-final.jpg
+const LOGO_SETS = { 'black-pine-circle': 'Black Pine Circle', 'easyish': 'Easyish' };
+function logoUrl(set, round) {
+  if (!LOGO_SETS[set]) return null;
+  return `logos/${set}${['', '-double', '-final'][round] ?? ''}.jpg`;
+}
+function preloadLogos(set) {
+  if (!LOGO_SETS[set] || preloadLogos.done === set) return;
+  preloadLogos.done = set;
+  [0, 1, 2].forEach(r => { new Image().src = logoUrl(set, r); });
+}
+
 const J = {
   offset: 0,
   state: null,
