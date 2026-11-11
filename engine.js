@@ -335,6 +335,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       need(!S.used[usedKey(S.round, c, r)], 'That clue has already been played');
       clearTimers();
       S.used[usedKey(S.round, c, r)] = true;
+      S.catsShown = null; // picking a clue means the categories should all be up
       S.view = 'clue';
       S.clue = {
         c, r, cat: S.game.rounds[S.round].categories[c].name, value: cl.value, text: cl.text, answer: cl.answer, dd: cl.dd,
