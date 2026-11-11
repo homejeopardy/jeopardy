@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jeopardy Board</title>
-<link rel="stylesheet" href="style.css?v=20261111b">
+<link rel="stylesheet" href="style.css?v=20261111c">
 <style>
   body { overflow: hidden; cursor: default; }
   .screen { position: fixed; inset: 0; display: none; }
@@ -53,6 +53,12 @@
   #clue .who.on { display: block; }
   .lights { position: absolute; left: 0; right: 0; bottom: 0; height: 1.4vh; }
   .lights i { display: block; height: 100%; background: linear-gradient(#fff6c0, #ffb800); box-shadow: 0 0 2vh #ffcc00; transform-origin: center; transform: scaleX(0); }
+
+  /* ---- category reveal, full screen ---- */
+  #catcard { background: var(--blue); align-items: center; justify-content: center; text-align: center; padding: 6vh 6vw;
+    box-shadow: inset 0 0 0 .25vh #000, inset 0 0 12vh rgba(0,0,0,.45); }
+  #catcard .name { font: 900 9vw/1.05 var(--value-font); font-stretch: condensed; text-transform: uppercase; color: #fff;
+    text-shadow: .5vw .5vw 0 #000; overflow-wrap: anywhere; }
 
   /* ---- daily double ---- */
   #dd { align-items: center; justify-content: center; flex-direction: column; background: radial-gradient(circle, #3b1fff 0%, #1300a0 45%, #06004a 100%); }
@@ -109,6 +115,7 @@
   <div class="who"></div>
   <div class="lights"><i data-timerbar></i></div>
 </div>
+<div id="catcard" class="screen"><div class="name"></div></div>
 <div id="dd" class="screen"><div class="logo">DAILY<br>DOUBLE</div><div class="wager"></div></div>
 <div id="final" class="screen"></div>
 <div id="end" class="screen"></div>
@@ -116,9 +123,9 @@
 <button id="fs">Full screen</button>
 <div id="unlock"><b>Click to start the game board</b><span>This turns on sound. Double-click the board any time for full screen.</span></div>
 
-<script src="mode.js?v=20261111b"></script>
+<script src="mode.js?v=20261111c"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="common.js?v=20261111b"></script>
+<script src="common.js?v=20261111c"></script>
 <script>
 // ------------------------------------------------------------ sound (generated, no audio files)
 const Snd = {
@@ -191,10 +198,10 @@ const Snd = {
 
 // ------------------------------------------------------------ rendering
 const $ = id => document.getElementById(id);
-let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [], zoom = null, seenCats = null;
+let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [], zoom = null, seenCats = null, lastFocus = null;
 
 function show(id) {
-  if (zoom && id !== 'clue') stopZoom();
+  if (zoom && id !== zoom.el.id) stopZoom();
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
 }
 
@@ -203,7 +210,7 @@ function render(s) {
   renderScores(s);
 
   if (s.view === 'title') { show('title'); lastClueKey = null; }
-  else if (s.view === 'board') { renderBoard(s); show('board'); lastClueKey = null; }
+  else if (s.view === 'board') { renderBoard(s); lastClueKey = null; renderCatFocus(s); }
   else if (s.view === 'clue' && s.clue) renderClue(s);
   else if (s.view === 'final' && s.final) { renderFinal(s); show('final'); }
   else if (s.view === 'end') { renderEnd(s); show('end'); }
@@ -241,7 +248,7 @@ function renderBoard(s) {
   // Only rebuild when the board actually changed, so animations aren't cut short
   if (html !== el._html) { el.innerHTML = html; el._html = html; }
   const heads = el.querySelectorAll('.cat');
-  for (let i = prevShown; i < shown; i++) if (heads[i] && b[i].name != null) {
+  for (let i = prevShown; i < shown; i++) if (heads[i] && b[i].name != null && i !== s.catFocus) {
     heads[i].classList.remove('flip'); void heads[i].offsetWidth; heads[i].classList.add('flip');
   }
 
@@ -292,40 +299,64 @@ function renderClue(s) {
   else if (!zoom) show('clue'); // mid-zoom updates wait for the zoom to finish
 }
 
+// Category reveal: the category grows full screen out of its heading and stays while the host reads it.
+function renderCatFocus(s) {
+  const i = s.catFocus;
+  const key = i == null ? null : `${s.fillSeq}-${s.round}-${i}`;
+  if (i == null || !s.board || !s.board[i]) { lastFocus = null; show('board'); return; }
+  $('catcard').querySelector('.name').textContent = s.board[i].name;
+  if (key === lastFocus) { if (!zoom) show('catcard'); return; }
+  lastFocus = key;
+  show('board');                                   // board behind, so the card grows out of it
+  const head = $('board').querySelectorAll('.cat')[i];
+  if (head) growFrom($('catcard'), head.getBoundingClientRect(), [], () => show('catcard'));
+  else show('catcard');
+}
+
 // Grow the clue screen out of its square on the board, which stays visible behind it.
 function zoomFrom(tile, c) {
-  stopZoom();
   const el = $('clue');
   const fly = el.querySelector('.fly');
   const money = tile.querySelector('.money');
   const tileFont = money ? parseFloat(getComputedStyle(money).fontSize) : 60;
   const from = tile.getBoundingClientRect();
-  el.classList.add('on', 'zooming');               // on top of the board; board stays on
+  tile.innerHTML = '';                              // the value lifts off its square
+  growFrom(el, from, (sx, sy, opts) => {
+    fly.textContent = '$' + c.value;
+    fly.style.fontSize = tileFont / ((sx + sy) / 2) + 'px'; // looks tile-sized at the start
+    const content = [...el.children].filter(n => n !== fly);
+    return [
+      fly.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }], opts),
+      ...content.map(n => n.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], opts)),
+    ];
+  }, () => show('clue'), 'zooming');
+}
+
+// Shared zoom: grow a full-screen element from a rectangle on the board, over the board.
+// extra(sx, sy, opts) can add animations for the element's contents.
+function growFrom(el, from, extra, done, cls) {
+  stopZoom();
+  el.classList.add('on');
+  if (cls) el.classList.add(cls);
   const to = el.getBoundingClientRect();
   const sx = from.width / to.width, sy = from.height / to.height;
-  fly.textContent = '$' + c.value;
-  fly.style.fontSize = tileFont / ((sx + sy) / 2) + 'px'; // looks tile-sized at the start
-  tile.innerHTML = '';                              // the value lifts off its square
-
-  const T = 600, opts = { duration: T, fill: 'both' };
-  const content = [...el.children].filter(n => n !== fly);
+  const opts = { duration: 600, fill: 'both' };
   const anims = [
     el.animate([
       { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${sx}, ${sy})`, transformOrigin: '0 0' },
       { transform: 'none', transformOrigin: '0 0' },
     ], { ...opts, easing: 'cubic-bezier(.45, 0, .25, 1)' }),
-    fly.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }], opts),
-    ...content.map(n => n.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], opts)),
+    ...(typeof extra === 'function' ? extra(sx, sy, opts) : extra),
   ];
-  zoom = { anims };
-  anims[0].onfinish = () => { if (zoom && zoom.anims === anims) { stopZoom(); show('clue'); } };
+  zoom = { anims, el, cls };
+  anims[0].onfinish = () => { if (zoom && zoom.anims === anims) { stopZoom(); done(); } };
 }
 
 function stopZoom() {
   if (!zoom) return;
   zoom.anims.forEach(a => a.cancel());
+  if (zoom.cls) zoom.el.classList.remove(zoom.cls);
   zoom = null;
-  $('clue').classList.remove('zooming');
 }
 
 function renderFinal(s) {

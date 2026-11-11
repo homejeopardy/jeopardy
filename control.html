@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jeopardy Control</title>
-<link rel="stylesheet" href="style.css?v=20261111b">
+<link rel="stylesheet" href="style.css?v=20261111c">
 <style>
   :root {
     --bg: #0d1020; --panel: #171b33; --panel2: #1f2544; --line: #2d3560; --text: #e8ebff; --muted: #9aa3d0;
@@ -198,11 +198,11 @@ FJ,U.S. STATES,,The only one-syllable state,What is Maine?,</pre>
 <div id="toast"></div>
 <div id="qr"></div>
 
-<script src="mode.js?v=20261111b"></script>
+<script src="mode.js?v=20261111c"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="engine.js?v=20261111b"></script>
-<script src="common.js?v=20261111b"></script>
+<script src="engine.js?v=20261111c"></script>
+<script src="common.js?v=20261111c"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = J.esc, money = J.money;
@@ -277,14 +277,19 @@ function renderMini(s) {
   $('legend').innerHTML = `${left} clue${left === 1 ? '' : 's'} left · <span style="color:#ff7df0">★</span> = Daily Double (only you can see this) · click a played clue to put it back`;
 }
 
-// "Reveal next category" — read each one aloud as it flips over on the board
+// "Reveal next category" — each one goes full screen on the board while you read it aloud
 function catReveal(s) {
   const cats = s.game?.rounds[s.round]?.categories || [];
-  if (s.catsShown == null || s.catsShown >= cats.length) return '';
+  const hidden = s.catsShown != null && s.catsShown < cats.length;
+  const focus = s.catFocus != null && cats[s.catFocus];
+  if (!hidden && !focus) return '';
   return `<div class="state" style="background:#123f7a;display:block">
-      <div style="margin-bottom:10px">Categories revealed: ${s.catsShown} of ${cats.length}</div>
-      <div class="row"><button class="primary big" data-a="revealCategory">Reveal next: ${esc(cats[s.catsShown].name)}</button>
-      <button data-a="revealAllCategories">Reveal all</button></div></div>`;
+      <div style="margin-bottom:10px">${focus ? `On screen: <b>${esc(focus.name)}</b> · ` : ''}Categories revealed: ${s.catsShown ?? cats.length} of ${cats.length}</div>
+      <div class="row">
+        ${hidden ? `<button class="primary big" data-a="revealCategory">Reveal next: ${esc(cats[s.catsShown].name)}</button>`
+                 : `<button class="primary big" data-a="hideCategory">Show the board</button>`}
+        ${hidden ? '<button data-a="revealAllCategories">Reveal all (skip)</button>' : ''}
+      </div></div>`;
 }
 
 function renderCur(s) {

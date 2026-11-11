@@ -33,6 +33,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       used: {},      // "round-c-r" -> true
       filledRound: -1,
       catsShown: null, // categories revealed on this round's board (null = all)
+      catFocus: null,  // category shown full screen right now
       fillSeq: 0,
       clue: null,
       final: null,
@@ -85,8 +86,8 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   }
 
   function snapshot() {
-    const { players, view, round, control, used, clue, final, filledRound, catsShown } = S;
-    history.push(JSON.stringify({ players, view, round, control, used, clue, final, filledRound, catsShown }));
+    const { players, view, round, control, used, clue, final, filledRound, catsShown, catFocus } = S;
+    history.push(JSON.stringify({ players, view, round, control, used, clue, final, filledRound, catsShown, catFocus }));
     if (history.length > 100) history.shift();
   }
 
@@ -217,6 +218,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   function enterBoard() {
     S.view = 'board';
     S.clue = null;
+    S.catFocus = null;
     if (S.filledRound !== S.round) { S.filledRound = S.round; S.catsShown = 0; S.fillSeq++; sfx('fill'); }
   }
 
@@ -293,7 +295,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   // Host actions. Ones listed in UNDOABLE are snapshotted first.
   const UNDOABLE = new Set(['setScore', 'adjust', 'setControl', 'showTitle', 'showBoard', 'selectClue', 'setDDPlayer', 'ddWager',
     'judge', 'revealAnswer', 'backToBoard', 'nextRound', 'setRound', 'startFinal', 'finalShowClue', 'finalStartTimer',
-    'finalLock', 'finalShow', 'finalJudge', 'finalShowAnswer', 'endGame', 'newGame', 'finalSetWager', 'finalSetAnswer', 'unuseClue', 'revealCategory', 'revealAllCategories']);
+    'finalLock', 'finalShow', 'finalJudge', 'finalShowAnswer', 'endGame', 'newGame', 'finalSetWager', 'finalSetAnswer', 'unuseClue', 'revealCategory', 'revealAllCategories', 'hideCategory']);
 
   const host = {
     loadGame({ text, name }) {
@@ -325,9 +327,11 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       need(S.catsShown != null && S.catsShown < n, 'All categories are already showing');
       if (S.view !== 'board') { clearTimers(); enterBoard(); }
       S.catsShown++;
+      S.catFocus = S.catsShown - 1; // full screen while the host reads it
       sfx('reveal');
     },
-    revealAllCategories() { S.catsShown = null; },
+    revealAllCategories() { S.catsShown = null; S.catFocus = null; },
+    hideCategory() { S.catFocus = null; },
     selectClue({ c, r }) {
       need(S.round < 2 && S.game, 'No board in this round');
       const cl = S.game.rounds[S.round].categories[c]?.clues[r];
@@ -335,7 +339,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       need(!S.used[usedKey(S.round, c, r)], 'That clue has already been played');
       clearTimers();
       S.used[usedKey(S.round, c, r)] = true;
-      S.catsShown = null; // picking a clue means the categories should all be up
+      S.catsShown = null; S.catFocus = null; // picking a clue means the categories should all be up
       S.view = 'clue';
       S.clue = {
         c, r, cat: S.game.rounds[S.round].categories[c].name, value: cl.value, text: cl.text, answer: cl.answer, dd: cl.dd,
@@ -523,6 +527,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
     };
     if (S.game && S.round < 2 && S.game.rounds[S.round]) {
       v.catsShown = S.catsShown;
+      v.catFocus = S.view === 'board' ? S.catFocus : null;
       v.board = S.game.rounds[S.round].categories.map((cat, c) => ({
         name: S.catsShown == null || c < S.catsShown ? cat.name : null, // unrevealed names stay secret
         clues: cat.clues.map((x, r) => ({ value: x.value, used: !!S.used[usedKey(S.round, c, r)] })),
