@@ -32,6 +32,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       control: 0,    // player who picks next
       used: {},      // "round-c-r" -> true
       filledRound: -1,
+      catsShown: null, // categories revealed on this round's board (null = all)
       fillSeq: 0,
       clue: null,
       final: null,
@@ -84,8 +85,8 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   }
 
   function snapshot() {
-    const { players, view, round, control, used, clue, final, filledRound } = S;
-    history.push(JSON.stringify({ players, view, round, control, used, clue, final, filledRound }));
+    const { players, view, round, control, used, clue, final, filledRound, catsShown } = S;
+    history.push(JSON.stringify({ players, view, round, control, used, clue, final, filledRound, catsShown }));
     if (history.length > 100) history.shift();
   }
 
@@ -216,7 +217,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   function enterBoard() {
     S.view = 'board';
     S.clue = null;
-    if (S.filledRound !== S.round) { S.filledRound = S.round; S.fillSeq++; sfx('fill'); }
+    if (S.filledRound !== S.round) { S.filledRound = S.round; S.catsShown = 0; S.fillSeq++; sfx('fill'); }
   }
 
   function openBuzzers() {
@@ -292,7 +293,7 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
   // Host actions. Ones listed in UNDOABLE are snapshotted first.
   const UNDOABLE = new Set(['setScore', 'adjust', 'setControl', 'showTitle', 'showBoard', 'selectClue', 'setDDPlayer', 'ddWager',
     'judge', 'revealAnswer', 'backToBoard', 'nextRound', 'setRound', 'startFinal', 'finalShowClue', 'finalStartTimer',
-    'finalLock', 'finalShow', 'finalJudge', 'finalShowAnswer', 'endGame', 'newGame', 'finalSetWager', 'finalSetAnswer', 'unuseClue']);
+    'finalLock', 'finalShow', 'finalJudge', 'finalShowAnswer', 'endGame', 'newGame', 'finalSetWager', 'finalSetAnswer', 'unuseClue', 'revealCategory', 'revealAllCategories']);
 
   const host = {
     loadGame({ text, name }) {
@@ -318,6 +319,15 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
 
     showTitle() { clearTimers(); S.view = 'title'; S.clue = null; },
     showBoard() { need(S.round < 2, 'Final Jeopardy has no board'); clearTimers(); enterBoard(); },
+    revealCategory() {
+      need(S.round < 2 && S.game, 'No board in this round');
+      const n = S.game.rounds[S.round].categories.length;
+      need(S.catsShown != null && S.catsShown < n, 'All categories are already showing');
+      if (S.view !== 'board') { clearTimers(); enterBoard(); }
+      S.catsShown++;
+      sfx('reveal');
+    },
+    revealAllCategories() { S.catsShown = null; },
     selectClue({ c, r }) {
       need(S.round < 2 && S.game, 'No board in this round');
       const cl = S.game.rounds[S.round].categories[c]?.clues[r];
@@ -511,8 +521,9 @@ function createEngine({ load = () => null, persist = () => {}, onChange = () => 
       board: null, clue: null, final: null,
     };
     if (S.game && S.round < 2 && S.game.rounds[S.round]) {
+      v.catsShown = S.catsShown;
       v.board = S.game.rounds[S.round].categories.map((cat, c) => ({
-        name: cat.name,
+        name: S.catsShown == null || c < S.catsShown ? cat.name : null, // unrevealed names stay secret
         clues: cat.clues.map((x, r) => ({ value: x.value, used: !!S.used[usedKey(S.round, c, r)] })),
       }));
     }

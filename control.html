@@ -260,7 +260,8 @@ function renderMini(s) {
   $('boardTitle').textContent = `${ROUND[s.round]} board — click a clue to play it`;
   el.style.gridTemplateColumns = `repeat(${rd.categories.length}, 1fr)`;
   const rows = Math.max(...rd.categories.map(c => c.clues.length));
-  let html = rd.categories.map(c => `<div class="c">${esc(c.name)}</div>`).join('');
+  const shownCats = s.catsShown == null ? rd.categories.length : s.catsShown;
+  let html = rd.categories.map((c, i) => `<div class="c" style="${i >= shownCats ? 'opacity:.4' : ''}" title="${i >= shownCats ? 'Not revealed yet' : ''}">${esc(c.name)}</div>`).join('');
   let left = 0;
   for (let r = 0; r < rows; r++) {
     html += rd.categories.map((cat, c) => {
@@ -274,6 +275,16 @@ function renderMini(s) {
   }
   el.innerHTML = html;
   $('legend').innerHTML = `${left} clue${left === 1 ? '' : 's'} left · <span style="color:#ff7df0">★</span> = Daily Double (only you can see this) · click a played clue to put it back`;
+}
+
+// "Reveal next category" — read each one aloud as it flips over on the board
+function catReveal(s) {
+  const cats = s.game?.rounds[s.round]?.categories || [];
+  if (s.catsShown == null || s.catsShown >= cats.length) return '';
+  return `<div class="state" style="background:#123f7a;display:block">
+      <div style="margin-bottom:10px">Categories revealed: ${s.catsShown} of ${cats.length}</div>
+      <div class="row"><button class="primary big" data-a="revealCategory">Reveal next: ${esc(cats[s.catsShown].name)}</button>
+      <button data-a="revealAllCategories">Reveal all</button></div></div>`;
 }
 
 function renderCur(s) {
@@ -296,6 +307,7 @@ function renderCur(s) {
     const rd = s.game?.rounds[s.round];
     const left = rd ? rd.categories.reduce((n, cat, c) => n + cat.clues.filter((_, r) => !s.used[`${s.round}-${c}-${r}`]).length, 0) : 0;
     el.innerHTML = `<h2>Board</h2>
+      ${catReveal(s)}
       <p style="font-size:18px"><b>${P(s.control)}</b> has control — pick a clue on the left.</p>
       ${left === 0 ? `<p>All clues in this round have been played.</p><button class="primary big" data-a="nextRound">${s.round === 0 && s.game.rounds[1]?.categories.length ? 'Go to Double Jeopardy →' : 'Go to Final Jeopardy →'}</button>` : ''}
       <p class="hint">Change who has control with the “Give control” button on a player.</p>`;

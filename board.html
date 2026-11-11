@@ -29,14 +29,19 @@
     font: 800 2.3vw/1.12 var(--value-font); font-stretch: condensed;
     text-shadow: 0.1vw 0.1vw 0 #000; overflow-wrap: anywhere;
   }
+  .cat .logo { font-size: 2.6vw; }
+  .cat.flip { animation: catflip .7s ease-out; }
+  @keyframes catflip { 0% { transform: perspective(60vw) rotateX(90deg); } 60% { transform: perspective(60vw) rotateX(-12deg); } 100% { transform: none; } }
   .tile .money { font-size: min(5.4vw, 10vh); color: var(--gold-deep); text-shadow: 0.25vw 0.25vw 0 #000; transition: opacity .15s; }
   .tile.hid .money { opacity: 0; }
   .cat-row-gap { grid-column: 1 / -1; height: 0; }
 
   /* ---- clue ---- */
   #clue { background: var(--blue); flex-direction: column; align-items: center; justify-content: center; padding: 6vh 7vw; text-align: center; }
-  #clue.zoom { animation: zoom .45s ease-out; }
-  @keyframes zoom { from { transform: scale(.12); } to { transform: scale(1); } }
+  /* opening a clue: the card lifts off its square showing the $ value, grows over the board, then becomes the clue */
+  #clue .fly { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--gold-deep); text-shadow: .04em .04em 0 #000; pointer-events: none; }
+  #clue.zooming .fly { display: flex; }
+  #clue.zooming { box-shadow: inset 0 0 0 .25vh #000, inset 0 0 3vh rgba(0,0,0,.45); }
   #clue .meta { position: absolute; top: 3vh; left: 0; right: 0; font: 800 2vw var(--value-font); color: #fff; opacity: .75; text-transform: uppercase; letter-spacing: .05em; }
   #clue .clue-text { font-size: 5vw; max-width: 90vw; }
   #clue .answer { margin-top: 5vh; font: 700 3.4vw var(--clue-font); color: var(--gold); text-shadow: .2vw .2vw 0 #000; text-transform: uppercase; }
@@ -97,6 +102,7 @@
 <div id="title" class="screen"><div class="logo">JEOPARDY!</div><div class="sub">Get ready to play</div></div>
 <div id="board" class="screen"></div>
 <div id="clue" class="screen">
+  <div class="fly money"></div>
   <div class="meta"></div>
   <div class="clue-text"></div>
   <div class="answer"></div>
@@ -145,6 +151,9 @@ const Snd = {
       for (let i = 0; i < 12; i++) this.tone(this.midi(84 + (i % 4) * 3), t + 0.9 + i * 0.05, 0.08, { vol: 0.08 });
     } else if (id === 'final') {
       [60, 64, 67, 72].forEach((n, i) => this.tone(this.midi(n), t + i * 0.12, 1.4 - i * 0.12, { type: 'triangle', vol: 0.12 }));
+    } else if (id === 'reveal') {
+      this.tone(320, t, 0.28, { type: 'sine', vol: 0.12, glide: 900 });
+      this.tone(this.midi(79), t + 0.22, 0.35, { type: 'triangle', vol: 0.1 });
     } else if (id === 'think') {
       this.think(extra || 30);
     } else if (id === 'stop') {
@@ -182,9 +191,10 @@ const Snd = {
 
 // ------------------------------------------------------------ rendering
 const $ = id => document.getElementById(id);
-let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [];
+let seenSfx = null, seenFill = null, lastClueKey = null, fillTimers = [], zoom = null, seenCats = null;
 
 function show(id) {
+  if (zoom && id !== 'clue') stopZoom();
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
 }
 
@@ -213,14 +223,27 @@ function renderBoard(s) {
   el.style.gridTemplateColumns = `repeat(${Math.max(b.length, 1)}, 1fr)`;
   const rows = Math.max(1, ...b.map(c => c.clues.length));
   el.style.gridTemplateRows = `1.35fr repeat(${rows}, 1fr)`;
-  let html = b.map(c => `<div class="cat">${J.esc(c.name)}</div>`).join('');
+  // Category headings: the JEOPARDY! logo until revealed, blank once every clue is played
+  const shown = s.catsShown == null ? b.length : s.catsShown;
+  const prevShown = seenCats && seenCats.fill === s.fillSeq ? seenCats.shown : shown;
+  seenCats = { fill: s.fillSeq, shown };
+  let html = b.map((c, i) => {
+    if (c.name == null) return `<div class="cat"><span class="logo">JEOPARDY!</span></div>`;
+    if (c.clues.every(x => x.used)) return `<div class="cat"></div>`;
+    return `<div class="cat">${J.esc(c.name)}</div>`;
+  }).join('');
   for (let r = 0; r < rows; r++) {
     html += b.map((c, ci) => {
       const cl = c.clues[r];
       return `<div class="tile" data-k="${ci}-${r}">${cl && !cl.used ? `<span class="money">$${cl.value}</span>` : ''}</div>`;
     }).join('');
   }
-  el.innerHTML = html;
+  // Only rebuild when the board actually changed, so animations aren't cut short
+  if (html !== el._html) { el.innerHTML = html; el._html = html; }
+  const heads = el.querySelectorAll('.cat');
+  for (let i = prevShown; i < shown; i++) if (heads[i] && b[i].name != null) {
+    heads[i].classList.remove('flip'); void heads[i].offsetWidth; heads[i].classList.add('flip');
+  }
 
   // board-fill animation at the start of each round
   if (seenFill === null) seenFill = s.fillSeq;
@@ -252,13 +275,8 @@ function renderClue(s) {
     show('dd'); lastClueKey = key; return;
   }
   const el = $('clue');
-  if (lastClueKey !== key) {
-    const cols = (s.board || []).length || 6, rows = 6;
-    el.style.transformOrigin = `${((c.c + 0.5) / cols) * 100}% ${((c.r + 1.5) / rows) * 100}%`;
-    el.classList.remove('zoom'); void el.offsetWidth;
-    if (!c.dd) el.classList.add('zoom');
-    lastClueKey = key;
-  }
+  const isNew = lastClueKey !== key;
+  lastClueKey = key;
   el.querySelector('.meta').textContent = `${c.cat}  ·  ${c.dd ? 'Daily Double · ' + J.money(c.ddWager) : J.money(c.value)}`;
   el.querySelector('.clue-text').textContent = c.text || '';
   el.querySelector('.answer').textContent = c.answer || '';
@@ -268,7 +286,46 @@ function renderClue(s) {
   who.classList.toggle('on', p != null && !c.answer);
   const bar = el.querySelector('[data-timerbar]');
   bar._timer = c.buzz === 'open' ? c.buzzTimer : null;
-  show('clue');
+
+  const tile = $('board').classList.contains('on') && $('board').querySelector(`.tile[data-k="${c.c}-${c.r}"]`);
+  if (isNew && !c.dd && tile) zoomFrom(tile, c);
+  else if (!zoom) show('clue'); // mid-zoom updates wait for the zoom to finish
+}
+
+// Grow the clue screen out of its square on the board, which stays visible behind it.
+function zoomFrom(tile, c) {
+  stopZoom();
+  const el = $('clue');
+  const fly = el.querySelector('.fly');
+  const money = tile.querySelector('.money');
+  const tileFont = money ? parseFloat(getComputedStyle(money).fontSize) : 60;
+  const from = tile.getBoundingClientRect();
+  el.classList.add('on', 'zooming');               // on top of the board; board stays on
+  const to = el.getBoundingClientRect();
+  const sx = from.width / to.width, sy = from.height / to.height;
+  fly.textContent = '$' + c.value;
+  fly.style.fontSize = tileFont / ((sx + sy) / 2) + 'px'; // looks tile-sized at the start
+  tile.innerHTML = '';                              // the value lifts off its square
+
+  const T = 600, opts = { duration: T, fill: 'both' };
+  const content = [...el.children].filter(n => n !== fly);
+  const anims = [
+    el.animate([
+      { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${sx}, ${sy})`, transformOrigin: '0 0' },
+      { transform: 'none', transformOrigin: '0 0' },
+    ], { ...opts, easing: 'cubic-bezier(.45, 0, .25, 1)' }),
+    fly.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }], opts),
+    ...content.map(n => n.animate([{ opacity: 0 }, { opacity: 0, offset: 0.6 }, { opacity: 1 }], opts)),
+  ];
+  zoom = { anims };
+  anims[0].onfinish = () => { if (zoom && zoom.anims === anims) { stopZoom(); show('clue'); } };
+}
+
+function stopZoom() {
+  if (!zoom) return;
+  zoom.anims.forEach(a => a.cancel());
+  zoom = null;
+  $('clue').classList.remove('zooming');
 }
 
 function renderFinal(s) {
